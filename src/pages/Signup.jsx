@@ -111,7 +111,7 @@ const Signup = () => {
         <input
           type="text"
           placeholder="Enter your full name"
-          value={email}
+          value={name}
           onChange={(e) => setName(e.target.value)}
           required
           className="border-2 border-gray-400 w-full p-2 rounded-xl my-2 mb-3"
