@@ -8,6 +8,7 @@ const UpdatePassword = () => {
  
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -20,6 +21,11 @@ const UpdatePassword = () => {
       password,
     });
 
+  if (password !== confirmPassword) {
+      setErrorMsg("Passwords do not match");
+      return;
+    }
+
     if (error) {
       setErrorMsg(error.message);
     } else {
@@ -27,9 +33,13 @@ const UpdatePassword = () => {
       setTimeout(() => navigate("/"), 2000);
     }
   };
+
+  
+
+
   return (
     
-    <div className="flex flex-col items-center justify-center min-h-screen bg-linear-to-b from-red-50 to-green-100">
+    <div className="flex flex-col justify-center items-center h-screen bg-linear-to-b from-red-50 to-green-100">
       <div className="bg-white p-8 rounded-2xl shadow-md w-[90%] sm:w-[400px]">
         <h2 className="text-2xl font-semibold text-center text-green-900 mb-4">
           Set a New Password
@@ -40,7 +50,17 @@ const UpdatePassword = () => {
             type="password"
             placeholder="Enter new password"
             value={password}
+         
             onChange={(e) => setPassword(e.target.value)}
+            required
+            className="border-2 border-gray-400 w-full p-2 rounded-xl my-2"
+          />
+          <label className="block mb-2 font-medium">Confirm New Password</label>
+          <input
+            type="password"
+            placeholder="Enter confirm new password"
+            value={confirmPassword }
+            onChange={(e) => setConfirmPassword(e.target.value)}
             required
             className="border-2 border-gray-400 w-full p-2 rounded-xl my-2"
           />

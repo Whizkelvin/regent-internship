@@ -109,7 +109,7 @@ const Signup = () => {
     <div className="w-full">
       <div className="py-4">
         <h3 className="text-3xl font-semibold">Create Account</h3>
-        <p className="text-sm text-red-900">Join Regent University Job Placement System</p>
+        <p className="text-sm text-red-900">Join <span className="text-black">Regent hub</span> Job Placement System</p>
       </div>
 
       <form onSubmit={handleSignup} className="flex flex-col">

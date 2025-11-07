@@ -26,9 +26,9 @@ const ForgotPassword = () => {
     }
   };
   return (
-    <div>
+    <div className="flex flex-col h-screen  bg-linear-to-b from-red-50 to-green-100">
       <div >
-        <div className='bg-green-700 h-16 md:hidden flex items-center '>
+        <div className='bg-green-700 h-16 md:hidden flex items-center w-full px-4'>
           <p className='text-white flex items-center gap-4'>
           <IoMdArrowBack 
           className='text-3xl cursor-pointer' 
@@ -38,7 +38,7 @@ const ForgotPassword = () => {
         </div>
         
 
-        <div className="flex flex-col items-center justify-center min-h-screen bg-linear-to-b from-red-50 to-green-100">
+        <div className="flex flex-col items-center justify-center mt-[30%]  ">
       <div className="bg-white p-8 rounded-2xl shadow-md w-[90%] sm:w-[400px]">
         <h2 className="text-2xl font-semibold text-center text-green-900 mb-4">
           Reset Your Password
