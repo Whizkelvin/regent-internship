@@ -59,10 +59,10 @@ const Signin = () => {
               className="w-20"
             />
             <h2 className="text-3xl font-semibold text-green-900 mt-4">
-              Welcome Back
+              Welcome
             </h2>
             <p className="text-sm text-gray-600">
-              Regent University Job Placement System
+              Regent Hub Job Placement System
             </p>
           </div>
 
@@ -104,6 +104,13 @@ const Signin = () => {
               {loading ? "Signing in..." : "Login"}
             </button>
           </form>
+
+          <p
+              onClick={() => navigate("/forgotpassword")}
+              className="text-red-700 text-sm text-end cursor-pointer mt-2"
+            >
+              Forgot password?
+            </p>
 
           <p className="text-center text-sm mt-4">
             Don't have an account?{" "}

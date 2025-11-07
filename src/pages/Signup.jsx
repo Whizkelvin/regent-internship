@@ -28,11 +28,19 @@ const Signup = () => {
     setSuccessMsg("");
     setLoading(true);
 
-    // ✅ Input Validation
+   
     if (!email.includes("@")) {
       setErrorMsg("Invalid email format");
       setLoading(false);
       return;
+    }
+
+    if(role === "student"){
+      !email.includes("@regent.edu.gh")
+      setErrorMsg("Enter only your school email");
+      setLoading(false);
+      return;
+
     }
 
     if (password.length < 6) {
@@ -48,7 +56,7 @@ const Signup = () => {
     }
 
     try {
-      // ✅ Sign up user with Supabase Auth
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -84,6 +92,17 @@ const Signup = () => {
     }
   };
 
+  const  getInfo = ()=>{
+    switch(role){
+      case 'student':
+        return 'student'
+      case 'company':
+        return 'company'
+      case 'admin':
+        return 'admin'
+    }
+  }
+
   return (
     <div className="bg-linear-to-b from-red-50 to-green-100 min-h-screen flex flex-col p-8 justify-center items-center">
     <div  className="md:bg-white md:p-8 rounded-2xl md:shadow-lg  md:w-[80%] flex justify-center items-center gap-6 md:gap-16 md:flex-row flex-col">
@@ -110,7 +129,7 @@ const Signup = () => {
         <label>Full Name</label>
         <input
           type="text"
-          placeholder="Enter your full name"
+          placeholder={`Enter your ${getInfo()} name`}
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
@@ -120,7 +139,7 @@ const Signup = () => {
         <label>Email Address</label>
         <input
           type="email"
-          placeholder="Enter your email"
+           placeholder={`Enter your ${getInfo()} email`}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -140,7 +159,7 @@ const Signup = () => {
         <label>{role === "student" ? "Student ID" : "ID Number"}</label>
         <input
           type="text"
-          placeholder="Enter your ID number"
+           placeholder={`Enter your ${getInfo()} ID number`}
           value={studentId}
           onChange={(e) => setStudentId(e.target.value)}
           required
@@ -215,8 +234,13 @@ const Signup = () => {
       </p>
     </div>
 
-    <div className="hidden md:block text-center capitalize">
-      <h1 className="text-4xl font-medium mb-10">regent University college of <br /> <span className="text-red-900">science and technology</span></h1>
+    <div className="hidden md:flex flex-col text-center capitalize items-center justify-center ">
+       <img
+              src="https://res.cloudinary.com/dnkk72bpt/image/upload/v1762440313/RUCST_logo-removebg-preview_hwdial.png"
+              alt="Regent Logo"
+              className="w-20"
+            />
+      <h1 className="text-5xl font-medium mb-10">regent <span className="text-red-900">hub</span></h1>
           <img
             src="https://res.cloudinary.com/dnkk72bpt/image/upload/v1762440610/Regent-University-College-of-Science-and-Technology-Mallam-Ghana-SchoolFinder-TortoisePathcom_himnme.jpg "
             alt=""
