@@ -2,10 +2,7 @@ import React, { useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 
-
 const UpdatePassword = () => {
-
- 
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,7 +18,7 @@ const UpdatePassword = () => {
       password,
     });
 
-  if (password !== confirmPassword) {
+    if (password !== confirmPassword) {
       setErrorMsg("Passwords do not match");
       return;
     }
@@ -34,11 +31,7 @@ const UpdatePassword = () => {
     }
   };
 
-  
-
-
   return (
-    
     <div className="flex flex-col justify-center items-center h-screen bg-linear-to-b from-red-50 to-green-100">
       <div className="bg-white p-8 rounded-2xl shadow-md w-[90%] sm:w-[400px]">
         <h2 className="text-2xl font-semibold text-center text-green-900 mb-4">
@@ -50,7 +43,6 @@ const UpdatePassword = () => {
             type="password"
             placeholder="Enter new password"
             value={password}
-         
             onChange={(e) => setPassword(e.target.value)}
             required
             className="border-2 border-gray-400 w-full p-2 rounded-xl my-2"
@@ -59,7 +51,7 @@ const UpdatePassword = () => {
           <input
             type="password"
             placeholder="Enter confirm new password"
-            value={confirmPassword }
+            value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
             className="border-2 border-gray-400 w-full p-2 rounded-xl my-2"
@@ -77,7 +69,6 @@ const UpdatePassword = () => {
       </div>
     </div>
   );
-  
-}
+};
 
-export default UpdatePassword
+export default UpdatePassword;

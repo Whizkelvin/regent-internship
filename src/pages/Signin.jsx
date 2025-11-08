@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { MdEmail } from "react-icons/md";
+import { RiLockPasswordFill } from "react-icons/ri";
 
 const Signin = () => {
   const navigate = useNavigate();
@@ -66,26 +68,28 @@ const Signin = () => {
             </p>
           </div>
 
-          <form onSubmit={handleSignin}>
+          <form onSubmit={handleSignin} className="relative">
             <label className="font-medium text-gray-800">Email Address</label>
+            <MdEmail className="absolute top-[42px] left-2 text-2xl text-green-900" />
             <input
               type="email"
               name="email"
               placeholder="example@regent.edu.gh"
               value={formData.email}
               onChange={handleChange}
-              className="border-2 border-gray-400 w-full p-2 rounded-xl my-2 mb-4"
+              className="border-2 border-gray-400 w-full p-2 rounded-xl my-2 mb-4 pl-10"
               required
             />
 
             <label className="font-medium text-gray-800">Password</label>
+            <RiLockPasswordFill className="absolute top-[133px] left-2 text-2xl text-green-900 " />
             <input
               type="password"
               name="password"
               placeholder="Enter your password"
               value={formData.password}
               onChange={handleChange}
-              className="border-2 border-gray-400 w-full p-2 rounded-xl my-2"
+              className="border-2 border-gray-400 w-full p-2 rounded-xl my-2 pl-10"
               required
             />
 
@@ -106,17 +110,17 @@ const Signin = () => {
           </form>
 
           <p
-              onClick={() => navigate("/forgotpassword")}
-              className="text-red-700 text-sm text-end cursor-pointer mt-2"
-            >
-              Forgot password?
-            </p>
+            onClick={() => navigate("/forgotpassword")}
+            className="text-red-700 text-sm text-end cursor-pointer mt-2"
+          >
+            Forgot password?
+          </p>
 
           <p className="text-center text-sm mt-4">
             Don't have an account?{" "}
             <button
               onClick={() => navigate("/signup")}
-              className="text-blue-700 underline"
+              className="text-green-950 underline"
             >
               Register
             </button>
@@ -127,7 +131,7 @@ const Signin = () => {
           <img
             src="https://res.cloudinary.com/dnkk72bpt/image/upload/v1762440610/Regent-University-College-of-Science-and-Technology-Mallam-Ghana-SchoolFinder-TortoisePathcom_himnme.jpg "
             alt=""
-            className="rounded-lg"
+            className="rounded-lg "
           />
         </div>
       </div>
