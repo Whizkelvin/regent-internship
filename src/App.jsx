@@ -13,14 +13,15 @@ const App = () => {
   return (
       <Routes>
 <Route
-  path="/home"
+  path="/hom"
   element={
     <ProtectedRoute>
-      <Home />
+     
     </ProtectedRoute>
   }
 />
         <Route path="/" element={<Signin />} />
+        <Route path="/home" element={<Home />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgotpassword" element={<ForgotPassword />} />
         <Route path="/updatepassword" element={<UpdatePassword />} />
