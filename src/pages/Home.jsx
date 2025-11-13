@@ -99,7 +99,7 @@ const Home = () => {
   console.log(session);
 
   return (
-    <div className=" relative bg-linear-to-b from-red-100 to-green-100">
+    <div className=" relative bg-linear-to-b from-red-100 to-green-100 w-full">
       {/* mobile Nav */}
       <div className="md:hidden py-4 flex justify-between px-5 fixed z-30 w-full shadow-md bg-white">
         <div className="flex items-center">
@@ -136,9 +136,9 @@ const Home = () => {
           openMenu ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="bg-white border border-green-950 w-[70%] h-screen p-5 text-center">
-          <p className="text-3xl font-Roboto">Menu</p>
-          <div className="mt-7">
+        <div className="bg-white border border-green-950 w-[70%] h-screen p-5">
+          <p className="text-3xl font-Roboto text-center">Menu</p>
+          <div className="mt-7 text-center">
             {navItems.map((item, index) => (
               <ul key={index}>
                 <li className="font-semibold font-Inter border-b border-green-900 py-2 capitalize text-lg">
@@ -151,9 +151,9 @@ const Home = () => {
           <div className="mt-9">
             <h1 className=" text-xl">CONTACT INFO</h1>
             <div>
-              <p className="my-2 flex items-center text-md gap-3">
-                <CiLocationOn className="text-2xl text-green-950" /> Regent
-                University - Menskro
+              <p className="my-2 flex items-center text gap-3">
+                <CiLocationOn className="text-3xl text-green-950" /> Regent
+                University College - Menskrom
               </p>
 
               <p
@@ -224,8 +224,8 @@ const Home = () => {
         </div>
       </div>
 
-      <div className="my-9">
-        <h3 className="text-3xl border-b w-1/2 pb-3 uppercase">
+      <div className="my-9 px-3">
+        <h3 className="text-3xl border-b w-[60%] pb-3 my-2 uppercase">
           Regent <span>Hub</span>
         </h3>
         <p>
@@ -251,7 +251,7 @@ const Home = () => {
         <img src="https://thumbs.dreamstime.com/z/internship-word-cloud-concept-grey-background-90730727.jpg?ct=jpeg" alt="" />
       </div>
 
-       <div className="my-9">
+       <div className="my-9 px-3">
         <h3 className="text-3xl border-b w-1/2 pb-3 uppercase">
           Testimonies
         </h3>
