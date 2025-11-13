@@ -173,7 +173,7 @@ const Home = () => {
             >
               <button
                 onClick={handleSignOut}
-                className="bg-green-950 text-white px-10 py-2 mt-10 rounded-md hover:bg-red-700"
+                className="bg-green-950 text-white px-10 py-2 mt-10 rounded-md"
               >
                 Sign Out
               </button>
