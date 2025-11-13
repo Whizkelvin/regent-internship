@@ -99,9 +99,9 @@ const Home = () => {
   console.log(session);
 
   return (
-    <div className=" relative bg-linear-to-b from-red-100 to-green-100 w-full">
+    <div className=" relative bg-linear-to-b from-red-100 to-green-100 w-full overflow-auto">
       {/* mobile Nav */}
-      <div className="md:hidden py-4 flex justify-between px-5 fixed z-30 w-full shadow-md bg-white">
+      <div className="md:hidden py-4 flex justify-between px-5 fixed z-30 w-full top-0 shadow-md bg-white">
         <div className="flex items-center">
           <div
             onClick={handleMenu}
@@ -126,6 +126,44 @@ const Home = () => {
         <div className="flex items-center">
           <FaUserCircle className="text-2xl mr-2" />
           <IoIosArrowDown onClick={profileMenu} />
+        </div>
+      </div>
+
+      {/* destop navigation */}
+      <div className=" bg-white w-full h-24 hidden md:flex justify-between items-center px-10 fixed z-40 shadow-lg">
+           <div className="flex items-center justify-center">
+          <img src="https://res.cloudinary.com/dnkk72bpt/image/upload/v1762440313/RUCST_logo-removebg-preview_hwdial.png" alt="" width={50}/>
+             <p className="text-4xl font-extrabold ml-3 text-red-900">Regent <span className="text-green-950">Hub</span></p>
+        </div>
+       
+        <div className="flex">
+          {navItems.map((item, index) => (
+            <ul>
+              <li className="ml-5 text-xl hover:text-red-900 hover:underline">
+                <Link key={index} to={item.path}>
+                  {item.name}
+                </Link>
+              </li>
+            </ul>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-center">
+          <div className="flex text-2xl text-green-950 items-center justify-center mr-10">
+            {profileItems.map((item, index) => (
+              <Link to={item.path} 
+              key={index}
+              className="mr-4">
+                {item.icon}
+              </Link>
+            ))}
+          </div>
+          <button
+            onClick={handleSignOut}
+            className="bg-green-950 text-white px-4 py-2 rounded-md"
+          >
+            Sign Out
+          </button>
         </div>
       </div>
 
@@ -209,57 +247,74 @@ const Home = () => {
 
       {/* main page */}
       <div>
-        <div className="slider-container pt-[23%]">
+        <div className="slider-container pt-[23%] md:pt-[9%] md:px-[4%] w-full overflow-hidden">
           <Slider {...settings}>
-            <div className="w-full h-[220px] bg-amber-700">
-              <img src="https://thumbs.dreamstime.com/z/businessman-pressing-button-virtual-screens-business-technology-internet-concept-recruitment-53297634.jpg?ct=jpeg" alt="" />
+            <div className="w-full h-[220px] bg-amber-700 md:h-[500px]">
+              <img
+                src="https://thumbs.dreamstime.com/z/businessman-pressing-button-virtual-screens-business-technology-internet-concept-recruitment-53297634.jpg?ct=jpeg"
+                alt=""
+              />
             </div>
-            <div className="w-full h-[220px] bg-amber-700">
-              <img src="https://thumbs.dreamstime.com/z/mentoring-virtual-screen-education-concept-e-learning-success-mentoring-virtual-screen-education-concept-e-learning-113918455.jpg?ct=jpeg" alt="" />
+            <div className="w-full h-[220px] bg-amber-700 md:h-[500px]">
+              <img
+                src="https://thumbs.dreamstime.com/z/mentoring-virtual-screen-education-concept-e-learning-success-mentoring-virtual-screen-education-concept-e-learning-113918455.jpg?ct=jpeg"
+                alt=""
+              />
             </div>
-            <div className="w-full h-[220px] bg-amber-700">
-             <img src="https://thumbs.dreamstime.com/z/internship-button-keyboard-blue-business-concept-49130674.jpg?ct=jpeg" alt="" />
+            <div className="w-full h-[220px] bg-amber-700 md:h-[500px]">
+              <img
+                src="https://thumbs.dreamstime.com/z/internship-button-keyboard-blue-business-concept-49130674.jpg?ct=jpeg"
+                alt=""
+              />
             </div>
           </Slider>
         </div>
       </div>
 
-      <div className="my-9 px-3">
+      <div className="my-9 px-3 md:px-[4%] w-full" >
         <h3 className="text-3xl border-b w-[60%] pb-3 my-2 uppercase">
-          Regent <span>Hub</span>
+         <p className="text-3xl font-extrabold ml-3 text-red-900 md:text-6xl">Regent <span className="text-green-950">Hub</span></p>
         </h3>
-        <p>
+        <p className="md:text-3xl">
           Lorem ipsum dolor sit amet consectetur adipisicing elit. Fugit eaque
           consequuntur ipsa commodi quam recusandae rem quaerat sunt, nostrum
           minima qui porro expedita laudantium at ipsum temporibus eveniet
-          laboriosam quos! Lorem ipsum dolor sit amet consectetur adipisicing elit. Maiores, deserunt officiis impedit assumenda adipisci distinctio facilis porro placeat dicta, voluptates qui? Velit, aliquam provident officia rem dolor quam pariatur laudantium?
+          laboriosam quos! Lorem ipsum dolor sit amet consectetur adipisicing
+          elit. Maiores, deserunt officiis impedit assumenda adipisci distinctio
+          facilis porro placeat dicta, voluptates qui? Velit, aliquam provident
+          officia rem dolor quam pariatur laudantium?
         </p>
       </div>
-      <div className="bg-green-900 text-white  p-3">
-        <h3 className="text-3xl">Choose what is Right for you</h3>
+      <div className="bg-green-900 text-white  p-3 md:mx-[4%]  md:my-10">
+        <h3 className="text-3xl md:text-6xl">Choose what is Right for you</h3>
         <div className="relative mt-3">
           <BiSearch className="absolute top-2.5 left-1 text-2xl" />
           <input
             type="text"
             placeholder="Browse our internship jobs "
-            className="border rounded pl-7 w-full py-2 text-white border-white"
+            className="border rounded pl-7 w-full py-2 text-white border-white md:w-1/2"
           />
         </div>
       </div>
 
-      <div>
-        <img src="https://thumbs.dreamstime.com/z/internship-word-cloud-concept-grey-background-90730727.jpg?ct=jpeg" alt="" />
+      <div className="md:px-[4%] md:h-[500px]">
+        <img
+          src="https://thumbs.dreamstime.com/z/internship-word-cloud-concept-grey-background-90730727.jpg?ct=jpeg"
+          alt=""
+          className="md:h-[500px] w-full"
+        />
       </div>
 
-       <div className="my-9 px-3">
-        <h3 className="text-3xl border-b w-1/2 pb-3 uppercase">
-          Testimonies
-        </h3>
-        <p>
+      <div className="my-9 p-3 md:px-[4%]">
+        <h3 className="text-3xl border-b w-1/2 pb-3 uppercase text-red-900 font-extrabold">Testimonies</h3>
+        <p className="md:text-3xl">
           Lorem ipsum dolor sit amet consectetur adipisicing elit. Fugit eaque
           consequuntur ipsa commodi quam recusandae rem quaerat sunt, nostrum
           minima qui porro expedita laudantium at ipsum temporibus eveniet
-          laboriosam quos! Lorem ipsum dolor sit amet consectetur adipisicing elit. Maiores, deserunt officiis impedit assumenda adipisci distinctio facilis porro placeat dicta, voluptates qui? Velit, aliquam provident officia rem dolor quam pariatur laudantium?
+          laboriosam quos! Lorem ipsum dolor sit amet consectetur adipisicing
+          elit. Maiores, deserunt officiis impedit assumenda adipisci distinctio
+          facilis porro placeat dicta, voluptates qui? Velit, aliquam provident
+          officia rem dolor quam pariatur laudantium?
         </p>
       </div>
     </div>
