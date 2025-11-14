@@ -60,7 +60,7 @@ const Signin = () => {
               alt="Regent Logo"
               className="w-20"
             />
-            <h2 className="text-3xl font-semibold text-green-900 mt-4">
+            <h2 className="text-3xl font-semibold text-green-950 mt-4">
               Welcome
             </h2>
             <p className="text-sm text-gray-600">
@@ -70,7 +70,7 @@ const Signin = () => {
 
           <form onSubmit={handleSignin} className="relative">
             <label className="font-medium text-gray-800">Email Address</label>
-            <MdEmail className="absolute top-[42px] left-2 text-2xl text-green-900" />
+            <MdEmail className="absolute top-[42px] left-2 text-2xl text-green-950" />
             <input
               type="email"
               name="email"
@@ -82,7 +82,7 @@ const Signin = () => {
             />
 
             <label className="font-medium text-gray-800">Password</label>
-            <RiLockPasswordFill className="absolute top-[133px] left-2 text-2xl text-green-900 " />
+            <RiLockPasswordFill className="absolute top-[133px] left-2 text-2xl text-green-950 " />
             <input
               type="password"
               name="password"
@@ -102,7 +102,7 @@ const Signin = () => {
 
             <button
               type="submit"
-              className="bg-green-900 text-white w-full mt-6 py-2 rounded-md hover:bg-green-800 transition-all"
+              className="bg-green-950 text-white w-full mt-6 py-2 rounded-md hover:bg-green-800 transition-all"
               disabled={loading}
             >
               {loading ? "Signing in..." : "Login"}

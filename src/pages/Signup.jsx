@@ -36,8 +36,7 @@ const Signup = () => {
       return;
     }
 
-    if (role === "student") {
-      !email.includes("@regent.edu.gh");
+    if (role === "student" && !email.includes("@regent.edu.gh") ) {
       setErrorMsg("Enter only your school email");
       setLoading(false);
       return;
@@ -130,7 +129,7 @@ const Signup = () => {
 
             <div className="relative">
               <label>Full Name</label>
-              <FaUser className="absolute top-[42px] left-2 text-2xl text-green-900" />
+              <FaUser className="absolute top-[42px] left-2 text-2xl text-green-950" />
               <input
                 type="text"
                 placeholder={`Enter your ${getInfo()} name`}
@@ -143,7 +142,7 @@ const Signup = () => {
 
             <div className="relative">
               <label>Email Address</label>
-              <MdEmail className="absolute top-[42px] left-2 text-2xl text-green-900" />
+              <MdEmail className="absolute top-[42px] left-2 text-2xl text-green-950" />
               <input
                 type="email"
                 placeholder={`Enter your ${getInfo()} email`}
@@ -156,7 +155,7 @@ const Signup = () => {
 
             <div className="relative">
               <label>Password</label>
-              <RiLockPasswordFill className="absolute top-[42px] left-2 text-2xl text-green-900" />
+              <RiLockPasswordFill className="absolute top-[42px] left-2 text-2xl text-green-950" />
               <input
                 type="password"
                 placeholder="Enter your password"
@@ -202,7 +201,7 @@ const Signup = () => {
 
                 <div className="relative">
                   <label>Graduation Year</label>
-                  <MdDateRange className="absolute top-[42px] left-2 text-2xl text-green-900" />
+                  <MdDateRange className="absolute top-[42px] left-2 text-2xl text-green-950" />
                   <input
                     type="date"
                     value={graduationYear}
@@ -214,7 +213,7 @@ const Signup = () => {
               </>
             )}
             <div className="relative">
-              <FaPhoneSquareAlt className="absolute top-[42px] left-2 text-2xl text-green-900" />
+              <FaPhoneSquareAlt className="absolute top-[42px] left-2 text-2xl text-green-950" />
               <label>Phone Number</label>
               <input
                 type="text"
@@ -246,7 +245,7 @@ const Signup = () => {
           <p className="my-4">
             Already have an account?{" "}
             <button
-              className="text-blue-700 underline"
+              className="text-green-950 underline"
               onClick={() => navigate("/")}
             >
               Sign In
