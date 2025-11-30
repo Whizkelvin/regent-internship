@@ -10,7 +10,7 @@ import InternshipJobs from "./pages/InternshipJobs";
 import Contact from "./pages/Contact";
 import About from "./pages/About";
 import Profile from "./pages/Profile";
-import Message from "./pages/message";
+import Message from "./pages/Message";
 import InternshipJobDescription from "./pages/InternshipJobDescription";
 
 const App = () => {
