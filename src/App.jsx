@@ -10,6 +10,8 @@ import InternshipJobs from "./pages/InternshipJobs";
 import Contact from "./pages/Contact";
 import About from "./pages/About";
 import Profile from "./pages/Profile";
+import Message from "./pages/message";
+import InternshipJobDescription from "./pages/InternshipJobDescription";
 
 const App = () => {
   return (
@@ -27,11 +29,13 @@ const App = () => {
       <Route path="/contact" element={<Contact />} />
       <Route path="/about-us" element={<About />} />
       <Route path="/profile" element={<Profile />} />
+      <Route path="/message" element={<Message />} />
 
       {/* <Route path="/home" element={  <Home />} /> */}
       <Route path="/signup" element={<Signup />} />
       <Route path="/forgotpassword" element={<ForgotPassword />} />
       <Route path="/updatepassword" element={<UpdatePassword />} />
+       <Route path="/job/:id" element={<InternshipJobDescription />} />
     </Routes>
   );
 };

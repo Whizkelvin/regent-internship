@@ -3,6 +3,7 @@ import { IoMdArrowBack } from "react-icons/io";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 import { useNavigate } from "react-router-dom";
+import { FaUser, FaEnvelope, FaIdCard, FaGraduationCap, FaPhone, FaCamera, FaEdit, FaUniversity, FaCalendarAlt } from "react-icons/fa";
 
 const Profile = () => {
   const { session } = useAuth();
@@ -85,64 +86,212 @@ const Profile = () => {
   };
 
   return (
-    <div>
-      {/* MOBILE HEADER */}
-      <div className="bg-green-950 h-16 md:hidden flex items-center w-full px-4 fixed top-0">
-        <p className="text-white flex items-center gap-4">
-          <IoMdArrowBack
-            className="text-3xl cursor-pointer"
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Mobile Header */}
+      <div className="bg-gradient-to-r from-green-950 to-green-800 h-16 md:hidden flex items-center w-full px-4 fixed top-0 z-50 shadow-lg">
+        <div className="flex items-center space-x-4">
+          <button
             onClick={() => navigate("/home")}
-          />
-          My Profile
-        </p>
+            className="text-white p-2 rounded-lg hover:bg-white/10 transition-all duration-300"
+          >
+            <IoMdArrowBack className="text-2xl" />
+          </button>
+          <div>
+            <p className="text-white font-semibold text-lg">My Profile</p>
+            <p className="text-green-200 text-xs">Manage your account</p>
+          </div>
+        </div>
       </div>
 
-      <div className="px-4">
-        {/* USER INFO */}
-        <div className="border-2 w-full px-4 mt-20 rounded-2xl py-4">
-          <p className="text-2xl mb-2 font-semibold">User Information</p>
-          <p>Full Name: <span>{user?.user_metadata?.name || "N/A"}</span></p>
-          <p>Email: <span>{user?.email || "N/A"}</span></p>
-          <p>ID Number: <span>{user?.user_metadata?.student_id || "N/A"}</span></p>
-          <p>ID Number: <span>{user?.user_metadata?.program|| "N/A"}</span></p>
-          <p>ID Number: <span>{user?.user_metadata?.graduation_year || "N/A"}</span></p>
-          <p>Phone Number: <span>{user?.user_metadata?.phone || "N/A"}</span></p>
+      {/* Desktop Header */}
+      <div className="hidden md:flex items-center justify-between px-8 py-4 bg-white/80 backdrop-blur-sm border-b border-gray-200">
+        <div className="flex items-center space-x-4">
+          <img
+            src="https://res.cloudinary.com/dnkk72bpt/image/upload/v1762440313/RUCST_logo-removebg-preview_hwdial.png"
+            alt="Regent University Logo"
+            className="w-10 h-10"
+          />
+          <div>
+            <p className="text-2xl font-bold text-gray-900">
+              Regent <span className="text-green-950">Hub</span>
+            </p>
+            <p className="text-gray-600 text-sm">Profile Management</p>
+          </div>
         </div>
+        <button
+          onClick={() => navigate("/home")}
+          className="bg-gradient-to-r from-green-950 to-green-800 hover:from-green-800 hover:to-green-700 text-white px-6 py-2 rounded-xl font-semibold transition-all duration-300 hover:scale-105 flex items-center space-x-2"
+        >
+          <IoMdArrowBack className="w-4 h-4" />
+          <span>Back to Home</span>
+        </button>
+      </div>
 
-        {/* PROFILE PIC UPLOAD */}
-        <div className="border-2 w-full px-4 mt-4 rounded-2xl py-4">
-          <p className="text-2xl mb-4 font-semibold">Profile Picture</p>
-          <div className="flex flex-col items-center gap-4">
+      <div className="pt-16 md:pt-8 px-4 md:px-8 max-w-6xl mx-auto">
+        {/* Profile Header Card */}
+        <div className="bg-gradient-to-r from-green-950 to-green-800 rounded-3xl p-6 md:p-8 text-white shadow-2xl mb-8">
+          <div className="flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-8">
+            {/* Profile Picture Section */}
             <div className="relative group">
-              <img
-                src={preview || "https://via.placeholder.com/150?text=No+Image"}
-                alt="Profile"
-                className="w-32 h-32 rounded-full object-cover border-4 border-gray-300 shadow-md"
+              <div className="relative">
+                <img
+                  src={preview || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&h=150&q=80"}
+                  alt="Profile"
+                  className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border-4 border-green-300 shadow-2xl"
+                />
+                <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300 cursor-pointer">
+                  <FaCamera className="text-2xl text-white" />
+                </div>
+              </div>
+              
+              <input
+                id="fileInput"
+                type="file"
+                accept="image/*"
+                onChange={uploadProfilePic}
+                className="hidden"
               />
-              <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 
-                              flex items-center justify-center text-white text-sm font-medium transition">
-                Change Photo
+              
+              <button
+                onClick={() => document.getElementById("fileInput").click()}
+                className="absolute -bottom-2 -right-2 bg-white text-green-900 p-2 rounded-full shadow-lg hover:scale-110 transition-all duration-300"
+                disabled={uploading}
+              >
+                <FaEdit className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* User Info */}
+            <div className="text-center md:text-left flex-1">
+              <h1 className="text-2xl md:text-4xl font-bold mb-2">
+                {user?.user_metadata?.name || "User"}
+              </h1>
+              <p className="text-green-200 text-lg mb-4">{user?.user_metadata?.program || "Student"}</p>
+              <div className="flex flex-wrap gap-4 justify-center md:justify-start">
+                <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full">
+                  <FaUniversity className="w-4 h-4" />
+                  <span className="text-sm">Regent University</span>
+                </div>
+                <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full">
+                  <FaIdCard className="w-4 h-4" />
+                  <span className="text-sm">{user?.user_metadata?.student_id || "N/A"}</span>
+                </div>
               </div>
             </div>
 
-            <input
-              id="fileInput"
-              type="file"
-              accept="image/*"
-              onChange={uploadProfilePic}
-              className="hidden"
-            />
-
+            {/* Upload Button */}
             <button
               onClick={() => document.getElementById("fileInput").click()}
-              className="px-6 py-2 bg-green-700 text-white text-sm rounded-full shadow-md 
-                         hover:bg-green-800 transition active:scale-95"
+              className="bg-white text-green-900 px-6 py-3 rounded-xl font-semibold hover:bg-green-50 transition-all duration-300 hover:scale-105 flex items-center space-x-2 shadow-lg"
               disabled={uploading}
             >
-              {uploading ? "Uploading..." : "Upload New Photo"}
+              {uploading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-green-900 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Uploading...</span>
+                </>
+              ) : (
+                <>
+                  <FaCamera className="w-5 h-5" />
+                  <span>Update Photo</span>
+                </>
+              )}
             </button>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* User Information Card */}
+          <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 p-6">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center">
+                <FaUser className="w-6 h-6 text-green-900" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Personal Information</h2>
+                <p className="text-gray-600">Your account details</p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                <FaUser className="w-5 h-5 text-green-900 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium">Full Name</p>
+                  <p className="text-gray-900 font-semibold">{user?.user_metadata?.name || "N/A"}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                <FaEnvelope className="w-5 h-5 text-green-900 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium">Email Address</p>
+                  <p className="text-gray-900 font-semibold">{user?.email || "N/A"}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                <FaIdCard className="w-5 h-5 text-green-900 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium">Student ID</p>
+                  <p className="text-gray-900 font-semibold">{user?.user_metadata?.student_id || "N/A"}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                <FaPhone className="w-5 h-5 text-green-900 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium">Phone Number</p>
+                  <p className="text-gray-900 font-semibold">{user?.user_metadata?.phone || "N/A"}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Academic Information Card */}
+          <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 p-6">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
+                <FaGraduationCap className="w-6 h-6 text-blue-900" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Academic Information</h2>
+                <p className="text-gray-600">Your educational details</p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex items-center space-x-4 p-4 bg-blue-50 rounded-2xl border border-blue-200">
+                <FaUniversity className="w-5 h-5 text-blue-900 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium">Program</p>
+                  <p className="text-gray-900 font-semibold">{user?.user_metadata?.program || "N/A"}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4 p-4 bg-blue-50 rounded-2xl border border-blue-200">
+                <FaCalendarAlt className="w-5 h-5 text-blue-900 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium">Graduation Year</p>
+                  <p className="text-gray-900 font-semibold">{user?.user_metadata?.graduation_year || "N/A"}</p>
+                </div>
+              </div>
+
+              {/* Additional Info Section */}
+              <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-100 rounded-2xl border border-green-200">
+                <h3 className="font-semibold text-green-900 mb-2">Career Readiness</h3>
+                <p className="text-sm text-green-800">
+                  Your profile is 85% complete. Update your skills and preferences to get better internship matches.
+                </p>
+                <div className="w-full bg-green-200 rounded-full h-2 mt-3">
+                  <div className="bg-green-900 h-2 rounded-full" style={{ width: '85%' }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      
       </div>
     </div>
   );
