@@ -1,5 +1,5 @@
 import React from "react";
-import { Router, Routes, Route, Link, useNavigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import Signup from "./pages/Signup";
 import Signin from "./pages/Signin";
 import Home from "./pages/Home";
@@ -16,6 +16,12 @@ import InternshipJobDescription from "./pages/InternshipJobDescription";
 const App = () => {
   return (
     <Routes>
+      {/* Unprotected routes */}
+      <Route path="/" element={<Signin />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/forgotpassword" element={<ForgotPassword />} />
+      
+      {/* Protected routes */}
       <Route
         path="/home"
         element={
@@ -24,18 +30,62 @@ const App = () => {
           </ProtectedRoute>
         }
       />
-      <Route path="/" element={<Signin />} />
-      <Route path="/jobs" element={<InternshipJobs />} />
-      <Route path="/contact" element={<Contact />} />
-      <Route path="/about-us" element={<About />} />
-      <Route path="/profile" element={<Profile />} />
-      <Route path="/message" element={<Message />} />
-
-      {/* <Route path="/home" element={  <Home />} /> */}
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/forgotpassword" element={<ForgotPassword />} />
-      <Route path="/updatepassword" element={<UpdatePassword />} />
-       <Route path="/job/:id" element={<InternshipJobDescription />} />
+      <Route
+        path="/jobs"
+        element={
+          <ProtectedRoute>
+            <InternshipJobs />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/contact"
+        element={
+          <ProtectedRoute>
+            <Contact />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/about-us"
+        element={
+          <ProtectedRoute>
+            <About />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/message"
+        element={
+          <ProtectedRoute>
+            <Message />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/updatepassword"
+        element={
+          <ProtectedRoute>
+            <UpdatePassword />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/job/:id"
+        element={
+          <ProtectedRoute>
+            <InternshipJobDescription />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 };
