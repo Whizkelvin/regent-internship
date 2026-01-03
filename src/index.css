@@ -11,3 +11,15 @@
 *{
     font-family: Roboto;
 }
+
+/* Add this to your global CSS file */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: text;
+}
+
+/* Also add this for all inputs */
+input:focus, textarea:focus {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+}

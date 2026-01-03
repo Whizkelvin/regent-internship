@@ -394,13 +394,12 @@ const Home = () => {
             Join the elite network of professionals shaping the future of industry and innovation
           </p>
           <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-6 justify-center">
-            <button className="bg-gradient-to-r from-green-900 to-green-700 hover:from-green-800 hover:to-green-600 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-2xl flex items-center space-x-3">
+            <button className="bg-gradient-to-r from-green-900 to-green-700 hover:from-green-800 hover:to-green-600 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-2xl flex items-center space-x-3"
+            onClick={()=>navigate("/jobs")}>
               <FaRocket className="w-6 h-6" />
               <span>Launch Your Career</span>
             </button>
-            <button className="border-2 border-white/30 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:bg-white/10 backdrop-blur-sm">
-              Schedule Executive Briefing
-            </button>
+            
           </div>
         </div>
       </div>

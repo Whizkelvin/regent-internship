@@ -216,7 +216,7 @@ const JobForm = ({ isEdit, jobData, onChange, onSubmit, onClose, handleImageUplo
                 value={jobData.salary_range}
                 onChange={(e) => onChange({...jobData, salary_range: e.target.value})}
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 transition-all duration-300"
-                placeholder="e.g., $50,000 - $70,000 per year"
+                placeholder="e.g.,  5,000 - 7,000  per monthr"
                 onKeyDown={(e) => e.stopPropagation()}
               />
             </div>
@@ -755,32 +755,34 @@ const AdminJobs = () => {
   }
 
   // Fetch applications
-  const fetchApplications = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('applications')
-        .select(`
-          *,
-          jobs:job_id (*)
-        `)
-        .order('created_at', { ascending: false })
+const fetchApplications = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        jobs (*)
+      `)
+      .order('created_at', { ascending: false })
 
-      if (!error) setApplications(data || [])
-    } catch (error) {
-      console.error('Error fetching applications:', error)
-    }
+    if (error) throw error;
+    setApplications(data || [])
+  } catch (error) {
+    console.error('Error fetching applications:', error)
   }
+}
+
+
 
   // Fetch application messages
   const fetchApplicationMessages = async () => {
     try {
       const { data, error } = await supabase
-        .from('application_messages')
+        .from('contact_messages')
         .select(`
           *,
-          sender:profiles!sender_id (full_name, avatar_url),
-          receiver:profiles!receiver_id (full_name, avatar_url),
-          applications!application_id (*)
+          subjects:subject,
+          message:message
         `)
         .order('created_at', { ascending: false })
 
@@ -1258,7 +1260,7 @@ const handleImageUpload = async (file, type) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      <Header />
+    
       
       {/* Floating Action Buttons */}
       <div className="fixed bottom-6 right-6 z-40 flex flex-col space-y-3">
@@ -1291,7 +1293,7 @@ const handleImageUpload = async (file, type) => {
         <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed md:relative md:translate-x-0 z-30 w-72 bg-gradient-to-b from-green-950 to-emerald-900 text-white h-screen transition-all duration-500 shadow-2xl`}>
           <div className="p-6 h-full flex flex-col">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white">Admin Hub</h2>
+              <h2 className="text-2xl font-bold text-white pt-16">Admin Hub</h2>
               <p className="text-emerald-200 text-sm mt-1">Dashboard v2.0</p>
             </div>
 
@@ -1367,7 +1369,7 @@ const handleImageUpload = async (file, type) => {
             <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
-                  <h1 className="text-3xl font-bold">Administration Center</h1>
+                  <h1 className="text-3xl font-bold pt-16">Administration Center</h1>
                   <p className="text-emerald-200 mt-2">
                     {activeTab === 'jobs' && 'Manage job postings and listings'}
                     {activeTab === 'applications' && 'Review and process job applications'}
