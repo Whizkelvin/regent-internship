@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import Header from '../components/Header'
+import { useAuth } from "../AuthContext";
 import { 
   FaPlus, 
   FaEdit, 
@@ -62,7 +63,8 @@ import {
   FaWindowMinimize,
   FaWindowMaximize,
   FaSave,
-  FaBan
+  FaBan,
+  FaSignOutAlt
 } from 'react-icons/fa'
 import { useNavigate } from 'react-router-dom'
 import { format, formatDistanceToNow } from 'date-fns'
@@ -70,6 +72,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 // Job Form Component
 const JobForm = ({ isEdit, jobData, onChange, onSubmit, onClose, handleImageUpload, uploading, uploadType }) => {
   const [formErrors, setFormErrors] = useState({})
+  const { session } = useAuth();
 
   const validateForm = () => {
     const errors = {}
@@ -650,7 +653,7 @@ const AdminJobs = () => {
       
       const jobData = {
         ...newJob,
-        user_id: user.id,
+        
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -924,6 +927,11 @@ const handleImageUpload = async (file, type) => {
       setSendingMessage(false)
     }
   }
+
+    const handleSignOut = async () => {
+      await supabase.auth.signOut();
+      navigate("/");
+    };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -1346,6 +1354,14 @@ const handleImageUpload = async (file, type) => {
                   <FaDownload className="w-5 h-5 group-hover:scale-110 transition-transform" />
                   <span>Export Data</span>
                 </button>
+
+                   <button
+                              onClick={handleSignOut}
+                             className="flex items-center space-x-3 w-full p-4 rounded-xl hover:bg-white/10 transition-all duration-300 group"
+                            >
+                              <FaSignOutAlt className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                              <span>Sign Out</span>
+                            </button>
               </div>
             </nav>
 
@@ -1443,35 +1459,507 @@ const handleImageUpload = async (file, type) => {
               <div className="p-6">
                 {activeTab === 'jobs' && <JobsTab />}
                 {activeTab === 'applications' && (
-                  <div className="text-center py-12">
-                    <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-2xl flex items-center justify-center">
-                      <FaClipboardCheck className="w-10 h-10 text-blue-500" />
+  <div className="space-y-6">
+    {/* Applications Header with Filters */}
+    <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg p-6 border border-gray-100">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="md:col-span-2">
+          <div className="relative">
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search applicants by name, email, or job title..."
+              value={applicationSearchTerm}
+              onChange={(e) => setApplicationSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-300"
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+        
+        <div>
+          <select
+            value={applicationStatusFilter}
+            onChange={(e) => setApplicationStatusFilter(e.target.value)}
+            className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 appearance-none transition-all duration-300"
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <option value="all">All Status</option>
+            <option value="pending">⏳ Pending</option>
+            <option value="reviewed">👁️ Reviewed</option>
+            <option value="shortlisted">⭐ Shortlisted</option>
+            <option value="interviewed">💬 Interviewed</option>
+            <option value="offered">💰 Offered</option>
+            <option value="accepted">✅ Accepted</option>
+            <option value="rejected">❌ Rejected</option>
+          </select>
+        </div>
+
+        <button
+          onClick={() => {
+            setApplicationSearchTerm('')
+            setApplicationStatusFilter('all')
+          }}
+          className="w-full px-4 py-2.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-xl font-medium transition-all duration-300 hover:shadow-sm"
+        >
+          Clear Filters
+        </button>
+      </div>
+    </div>
+
+    {/* Applications List */}
+    {loading ? (
+      <div className="p-12 text-center">
+        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading applications...</p>
+      </div>
+    ) : filteredApplications.length === 0 ? (
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-12 text-center">
+        <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-2xl flex items-center justify-center">
+          <FaClipboardCheck className="w-10 h-10 text-blue-500" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-900 mb-2">
+          {applications.length === 0 ? 'No Applications Yet' : 'No Applications Found'}
+        </h3>
+        <p className="text-gray-600 mb-6 max-w-md mx-auto">
+          {applications.length === 0 
+            ? "No candidates have applied for jobs yet. Check back later." 
+            : "No applications match your current filters. Try adjusting your search criteria."}
+        </p>
+        <button
+          onClick={fetchApplications}
+          className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-300"
+        >
+          Refresh Applications
+        </button>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {filteredApplications.map((application) => {
+          const StatusIcon = getStatusIcon(application.status)
+          return (
+            <div key={application.id} className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
+              <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 className="font-bold text-gray-900">{application.full_name || 'Anonymous Applicant'}</h4>
+                    <p className="text-sm text-gray-600">{application.email}</p>
+                    <div className="mt-2">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(application.status)}`}>
+                        <StatusIcon className="w-3 h-3 mr-2" />
+                        {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
+                      </span>
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">Applications Center</h3>
-                    <p className="text-gray-600">Review and manage job applications from candidates</p>
-                    <button
-                      onClick={fetchApplications}
-                      className="mt-4 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-300"
-                    >
-                      Load Applications
-                    </button>
                   </div>
-                )}
-                {activeTab === 'messages' && (
-                  <div className="text-center py-12">
-                    <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-purple-100 to-pink-100 rounded-2xl flex items-center justify-center">
-                      <FaInbox className="w-10 h-10 text-purple-500" />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">Messages Center</h3>
-                    <p className="text-gray-600">Communicate with applicants and manage conversations</p>
-                    <button
-                      onClick={fetchApplicationMessages}
-                      className="mt-4 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-300"
-                    >
-                      Load Messages
-                    </button>
-                  </div>
-                )}
+                  <button className="text-gray-400 hover:text-gray-600">
+                    <FaEllipsisH className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="mb-6">
+                  <p className="font-medium text-gray-900 mb-1">{application.jobs?.title || 'Unknown Position'}</p>
+                  <p className="text-sm text-gray-600">{application.jobs?.company || 'Unknown Company'}</p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Applied {format(new Date(application.created_at), 'MMM dd, yyyy')}
+                  </p>
+                </div>
+
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => {
+                      setSelectedApplication(application)
+                      setShowApplicationDetails(true)
+                    }}
+                    className="flex-1 flex items-center justify-center space-x-2 py-2.5 bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 rounded-lg font-medium transition-all duration-300 hover:shadow-sm"
+                  >
+                    <FaEye className="w-4 h-4" />
+                    <span>Review</span>
+                  </button>
+                  <button
+                    onClick={() => acceptApplication(application.id)}
+                    className="px-3 py-2.5 bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 rounded-lg transition-all duration-300 hover:shadow-sm"
+                    title="Accept"
+                  >
+                    <FaCheckCircle className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => rejectApplication(application.id)}
+                    className="px-3 py-2.5 bg-gradient-to-r from-rose-50 to-red-50 text-rose-700 rounded-lg transition-all duration-300 hover:shadow-sm"
+                    title="Reject"
+                  >
+                    <FaTimesCircle className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )}
+
+    {/* Applications Stats */}
+    {filteredApplications.length > 0 && (
+      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-900">{filteredApplications.length}</p>
+            <p className="text-sm text-gray-600">Showing</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-yellow-600">{applications.filter(a => a.status === 'pending').length}</p>
+            <p className="text-sm text-gray-600">Pending</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-green-600">{applications.filter(a => a.status === 'accepted').length}</p>
+            <p className="text-sm text-gray-600">Accepted</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-red-600">{applications.filter(a => a.status === 'rejected').length}</p>
+            <p className="text-sm text-gray-600">Rejected</p>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+             {activeTab === 'messages' && (
+  <div className="space-y-6">
+    {/* Messages Header */}
+    <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg p-6 border border-gray-100">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Messages Center</h2>
+          <p className="text-gray-600">Communicate with applicants and manage conversations</p>
+        </div>
+        <div className="flex space-x-3">
+          <button
+            onClick={fetchApplicationMessages}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg"
+          >
+            <FaSync className="w-4 h-4" />
+            <span>Refresh Messages</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {/* Messages Stats */}
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Total Messages</p>
+            <p className="text-2xl font-bold text-gray-900">{applicationMessages.length}</p>
+          </div>
+          <div className="p-2 bg-purple-50 rounded-lg">
+            <FaInbox className="w-6 h-6 text-purple-500" />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Unread</p>
+            <p className="text-2xl font-bold text-red-600">
+              {applicationMessages.filter(msg => !msg.is_read && msg.sender_id !== (supabase.auth.getUser()?.data?.user?.id)).length}
+            </p>
+          </div>
+          <div className="p-2 bg-red-50 rounded-lg">
+            <FaBell className="w-6 h-6 text-red-500" />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Today</p>
+            <p className="text-2xl font-bold text-green-600">
+              {applicationMessages.filter(m => new Date(m.created_at).toDateString() === new Date().toDateString()).length}
+            </p>
+          </div>
+          <div className="p-2 bg-green-50 rounded-lg">
+            <FaEnvelope className="w-6 h-6 text-green-500" />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">From Applicants</p>
+            <p className="text-2xl font-bold text-blue-600">
+              {applicationMessages.filter(m => m.sender_id !== (supabase.auth.getUser()?.data?.user?.id)).length}
+            </p>
+          </div>
+          <div className="p-2 bg-blue-50 rounded-lg">
+            <FaUserFriends className="w-6 h-6 text-blue-500" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Messages List */}
+    {loading ? (
+      <div className="p-12 text-center">
+        <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading messages...</p>
+      </div>
+    ) : applicationMessages.length === 0 ? (
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-12 text-center">
+        <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-purple-100 to-pink-100 rounded-2xl flex items-center justify-center">
+          <FaInbox className="w-10 h-10 text-purple-500" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-900 mb-2">No Messages Yet</h3>
+        <p className="text-gray-600 mb-6 max-w-md mx-auto">
+          Start conversations with applicants to track communication about their applications.
+        </p>
+        <button
+          onClick={fetchApplicationMessages}
+          className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-300"
+        >
+          Refresh Messages
+        </button>
+      </div>
+    ) : (
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Conversation
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Job Position
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Message Preview
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date & Time
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {applicationMessages.map((msg) => {
+                const isMe = msg.sender_id === (supabase.auth.getUser()?.data?.user?.id)
+                const isUnread = !msg.is_read && !isMe
+                
+                return (
+                  <tr 
+                    key={msg.id} 
+                    className={`hover:bg-gray-50 transition-colors ${isUnread ? 'bg-blue-50' : ''}`}
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-shrink-0">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isMe ? 'bg-green-100' : 'bg-purple-100'}`}>
+                            <FaUser className={`w-5 h-5 ${isMe ? 'text-green-600' : 'text-purple-600'}`} />
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {isMe ? 'You' : msg.sender?.full_name || 'Applicant'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {isMe ? 'To: Applicant' : 'From: Applicant'}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm text-gray-900">{msg.applications?.jobs?.title || 'Unknown Job'}</p>
+                      <p className="text-xs text-gray-500">{msg.applications?.jobs?.company || 'Unknown Company'}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm text-gray-900 truncate max-w-xs">
+                        {msg.message.length > 50 ? `${msg.message.substring(0, 50)}...` : msg.message}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        {format(new Date(msg.created_at), 'MMM dd')}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {format(new Date(msg.created_at), 'hh:mm a')}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {isUnread ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          <FaBell className="w-3 h-3 mr-1" />
+                          Unread
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <FaCheckCircle className="w-3 h-3 mr-1" />
+                          Read
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => {
+                            // Find the application for this message
+                            const app = applications.find(a => a.id === msg.application_id)
+                            if (app) {
+                              setSelectedApplication(app)
+                              setShowMessageModal(true)
+                            }
+                          }}
+                          className="text-purple-600 hover:text-purple-900 p-1"
+                          title="Reply"
+                        >
+                          <FaReply className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await supabase
+                                .from('application_messages')
+                                .update({ is_read: true })
+                                .eq('id', msg.id)
+                              
+                              fetchApplicationMessages()
+                            } catch (error) {
+                              console.error('Error marking as read:', error)
+                            }
+                          }}
+                          className="text-green-600 hover:text-green-900 p-1"
+                          title="Mark as Read"
+                        >
+                          <FaCheckCircle className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Find the application details
+                            const app = applications.find(a => a.id === msg.application_id)
+                            if (app) {
+                              setSelectedApplication(app)
+                              setShowApplicationDetails(true)
+                            }
+                          }}
+                          className="text-blue-600 hover:text-blue-900 p-1"
+                          title="View Application"
+                        >
+                          <FaEye className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination or Load More */}
+        <div className="px-6 py-4 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              Showing {applicationMessages.length} messages
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => {
+                  // Could implement pagination here
+                }}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => {
+                  // Could implement pagination here
+                }}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Quick Actions */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+        <div className="flex items-start space-x-3">
+          <div className="p-3 bg-green-100 rounded-lg">
+            <FaPaperPlane className="w-6 h-6 text-green-600" />
+          </div>
+          <div>
+            <h4 className="font-semibold text-gray-900 mb-2">Quick Reply</h4>
+            <p className="text-sm text-gray-600 mb-3">Send a message to an applicant</p>
+            <button
+              onClick={() => {
+                if (applications.length > 0) {
+                  setSelectedApplication(applications[0])
+                  setShowMessageModal(true)
+                } else {
+                  alert('No applications found. Please load applications first.')
+                }
+              }}
+              className="text-sm text-green-700 hover:text-green-900 font-medium"
+            >
+              Start Conversation →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+        <div className="flex items-start space-x-3">
+          <div className="p-3 bg-blue-100 rounded-lg">
+            <FaEnvelope className="w-6 h-6 text-blue-600" />
+          </div>
+          <div>
+            <h4 className="font-semibold text-gray-900 mb-2">Bulk Messages</h4>
+            <p className="text-sm text-gray-600 mb-3">Send messages to multiple applicants</p>
+            <button
+              onClick={() => alert('Bulk messaging feature coming soon!')}
+              className="text-sm text-blue-700 hover:text-blue-900 font-medium"
+            >
+              Send to Multiple →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
+        <div className="flex items-start space-x-3">
+          <div className="p-3 bg-purple-100 rounded-lg">
+            <FaDownload className="w-6 h-6 text-purple-600" />
+          </div>
+          <div>
+            <h4 className="font-semibold text-gray-900 mb-2">Export Messages</h4>
+            <p className="text-sm text-gray-600 mb-3">Download all conversations</p>
+            <button
+              onClick={() => {
+                // Export messages as CSV
+                const csvContent = convertToCSV(applicationMessages)
+                downloadCSV(csvContent, 'messages_export.csv')
+              }}
+              className="text-sm text-purple-700 hover:text-purple-900 font-medium"
+            >
+              Download CSV →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
                 {activeTab === 'users' && <UsersTab />}
               </div>
             </div>
