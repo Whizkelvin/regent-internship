@@ -30,31 +30,51 @@ const Signin = () => {
   };
 
   const handleSignin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrorMsg("");
-    setSuccessMsg("");
+  e.preventDefault();
+  setLoading(true);
+  setErrorMsg("");
+  setSuccessMsg("");
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: formData.email,
+      password: formData.password,
+    });
+
+    if (error) {
+      setErrorMsg(error.message);
+      return;
+    }
+
+    if (!data.session || !data.user) {
+      setErrorMsg("Please verify your email before logging in.");
+      return;
+    }
+
+    const user = data.user;
+
+    // ✅ ADMIN CHECK
+    if (user.email === "admin@regent.edu.gh") {
+      await supabase.auth.updateUser({
+        data: { role: "admin" },
       });
 
-      if (error) {
-        setErrorMsg(error.message);
-      } else if (!data.session) {
-        setErrorMsg("Please verify your email before logging in.");
-      } else {
-        setSuccessMsg("Login successful! Redirecting...");
-        setTimeout(() => navigate("/home"), 1500);
-      }
-    } catch (err) {
-      setErrorMsg("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
+      setSuccessMsg("Admin login successful! Redirecting...");
+      setTimeout(() => navigate("/adminpage"), 1500);
+      return;
     }
-  };
+
+    // ✅ NORMAL USER
+    setSuccessMsg("Login successful! Redirecting...");
+    setTimeout(() => navigate("/home"), 1500);
+
+  } catch (err) {
+    setErrorMsg("Something went wrong. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4 relative overflow-hidden">

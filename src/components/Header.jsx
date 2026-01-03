@@ -7,6 +7,7 @@ import { CiLocationOn, CiMenuBurger } from "react-icons/ci";
 import { FaUserCircle, FaUserEdit, FaSignOutAlt, FaBriefcase, FaEnvelope, FaBuilding, FaHome, FaPhone, FaChevronDown } from "react-icons/fa";
 import { IoClose } from "react-icons/io5";
 import { MdMessage, MdWorkHistory } from "react-icons/md";
+import { hi } from './../../node_modules/date-fns/locale/hi';
 
 const Header = () => {
   const navigate = useNavigate();
@@ -20,7 +21,6 @@ const Header = () => {
   const navItems = [
     { name: "Home", path: "/home", icon: <FaHome className="w-4 h-4" /> },
     { name: "Internship Jobs", path: "/jobs", icon: <FaBriefcase className="w-4 h-4" /> },
-    { name: "Companies", path: "/companies", icon: <FaBuilding className="w-4 h-4" /> },
     { name: "Contact", path: "/contact", icon: <FaEnvelope className="w-4 h-4" /> },
     { name: "About Us", path: "/about-us", icon: <FaUserCircle className="w-4 h-4" /> },
   ];
@@ -28,7 +28,7 @@ const Header = () => {
   const profileItems = [
     { name: "Profile", path: "/profile", icon: <FaUserEdit className="w-4 h-4" /> },
     { name: "Messages", path: "/message", icon: <MdMessage className="w-4 h-4" /> },
-    { name: "My Applications", path: "/internship", icon: <MdWorkHistory className="w-4 h-4" /> },
+    { name: "My Applications", path: "/whistlist ", icon: <MdWorkHistory className="w-4 h-4" /> },
   ];
 
   const handleSignOut = async () => {
@@ -60,7 +60,7 @@ const Header = () => {
   return (
     <div className="relative">
       {/* Mobile Header */}
-      <div className="md:hidden py-4 flex justify-between items-center px-6 fixed z-50 w-full top-0 bg-gradient-to-r from-green-950 to-green-800 text-white shadow-2xl">
+      <div className=" py-4 flex justify-between items-center px-6 fixed z-50 w-full top-0 bg-gradient-to-r from-green-950 to-green-800 text-white shadow-2xl lg:hidden">
         <div className="flex items-center space-x-4">
           <button
             onClick={handleMenu}
@@ -100,7 +100,7 @@ const Header = () => {
       </div>
 
       {/* Desktop Navigation */}
-      <div className="hidden md:flex justify-between items-center px-8 lg:px-16 py-4 fixed z-50 w-full top-0 bg-white/95 backdrop-blur-sm shadow-2xl border-b border-gray-200">
+      <div className="hidden md:hidden lg:flex  justify-between items-center px-8 lg:px-16 py-4 fixed z-50 w-full top-0 bg-white/95 backdrop-blur-sm shadow-2xl border-b border-gray-200">
         {/* Logo Section */}
         <div className="flex items-center space-x-4">
           <img 
@@ -162,7 +162,7 @@ const Header = () => {
               </div>
               <div className="relative">
                 <img
-                  src={profilePic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&h=100&q=80"}
+                  src={profilePic || "https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_Placeholder.png"}
                   alt="Profile"
                   className="w-10 h-10 rounded-full object-cover border-2 border-green-900 shadow-lg"
                 />
@@ -183,7 +183,7 @@ const Header = () => {
 
       {/* Mobile Navigation Menu */}
   <div
-  className={`fixed inset-0 z-40 transform transition-all duration-500 ease-in-out md:hidden ${
+  className={`fixed inset-0 z-40 transform transition-all duration-500 ease-in-out lg:hidden ${
     openMenu ? "translate-x-0" : "-translate-x-full"
   }`}
 >
@@ -287,7 +287,7 @@ const Header = () => {
 
       {/* Mobile Profile Menu */}
       <div
-        className={`fixed inset-0 z-40 transform transition-all duration-300 ease-in-out md:hidden ${
+        className={`fixed inset-0 z-40 transform transition-all duration-300 ease-in-out lg:hidden ${
           openProfile ? "translate-x-0" : "translate-x-full"
         }`}
       >

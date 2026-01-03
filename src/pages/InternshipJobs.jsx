@@ -342,7 +342,7 @@ const InternshipJobs = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
             {filteredJobs.map((job) => (
               <div
                 key={job.id}
@@ -435,7 +435,7 @@ const InternshipJobs = () => {
                     {job.salary_range && (
                       <div className="flex items-center space-x-3 text-gray-600">
                         <FaMoneyBillWave className="w-4 h-4 text-green-900 flex-shrink-0" />
-                        <span className="text-sm font-medium">{job.salary_range}</span>
+                        <span className="text-sm font-medium">GHS {job.salary_range} /month</span>
                       </div>
                     )}
                     <div className="flex items-center space-x-3 text-gray-600">
@@ -479,14 +479,7 @@ const InternshipJobs = () => {
           <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto leading-relaxed">
             Join the elite network of Regent University alumni shaping the future of industry and innovation across Ghana and beyond.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="bg-gradient-to-r from-green-900 to-green-700 hover:from-green-800 hover:to-green-600 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-2xl">
-              Create Professional Profile
-            </button>
-            <button className="border-2 border-white/30 text-white px-8 py-4 rounded-xl font-semibold hover:bg-white/10 transition-all duration-300 backdrop-blur-sm">
-              Schedule Career Consultation
-            </button>
-          </div>
+          
         </div>
       </div>
     </div>

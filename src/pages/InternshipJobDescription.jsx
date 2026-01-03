@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { supabase } from '../supabaseClient'
-import Header from '../components/Header'
-import { 
-  FaArrowLeft, 
-  FaMapMarkerAlt, 
-  FaBriefcase, 
-  FaMoneyBillWave, 
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "../supabaseClient";
+import Header from "../components/Header";
+import {
+  FaArrowLeft,
+  FaMapMarkerAlt,
+  FaBriefcase,
+  FaMoneyBillWave,
   FaClock,
   FaBuilding,
   FaExternalLinkAlt,
@@ -29,192 +29,727 @@ import {
   FaRegStar,
   FaShoppingBag,
   FaTruck,
-
   FaAward,
   FaComment,
   FaUserCircle,
   FaPaperPlane,
   FaThumbsUp,
-  FaRegThumbsUp
-} from 'react-icons/fa'
+  FaRegThumbsUp,
+  FaUpload,
+  FaFilePdf,
+  FaFileWord,
+  FaUser,
+  FaEnvelope,
+  FaPhone,
+  FaFileAlt,
+  FaTimes,
+  FaPaperclip,
+  FaDownload
+} from "react-icons/fa";
+import { v4 as uuidv4 } from 'uuid';
 
 const InternshipJobDescription = () => {
-  const { id } = useParams()
-  const navigate = useNavigate()
-  const [job, setJob] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [saved, setSaved] = useState(false)
-  const [liked, setLiked] = useState(false)
-  const [showShareMenu, setShowShareMenu] = useState(false)
-  const [activeTab, setActiveTab] = useState('description')
-  const [similarJobs, setSimilarJobs] = useState([])
-  const [comments, setComments] = useState([])
-  const [newComment, setNewComment] = useState('')
-  const [commentLoading, setCommentLoading] = useState(false)
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [job, setJob] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saved, setSaved] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [activeTab, setActiveTab] = useState("description");
+  const [similarJobs, setSimilarJobs] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
+  const [commentLoading, setCommentLoading] = useState(false);
+
+  // Application states
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [applicationForm, setApplicationForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    cover_letter: "",
+    resume_url: ""
+  });
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [userHasApplied, setUserHasApplied] = useState(false);
+  const [userApplication, setUserApplication] = useState(null);
+  const [applicationMessages, setApplicationMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [showMessages, setShowMessages] = useState(false);
 
   useEffect(() => {
     if (id) {
-      fetchJobDetails()
-      fetchSimilarJobs()
-      fetchComments()
+      fetchJobDetails();
+      fetchSimilarJobs();
+      fetchComments();
+      checkUserApplication();
     }
-  }, [id])
+  }, [id]);
+
+  // Check if user has already applied
+  useEffect(() => {
+    const checkApplication = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && id) {
+        const { data } = await supabase
+          .from('applications')
+          .select('*')
+          .eq('job_id', id)
+          .eq('user_id', user.id)
+          .single();
+        
+        if (data) {
+          setUserHasApplied(true);
+          setUserApplication(data);
+          fetchApplicationMessages(data.id);
+        }
+      }
+    };
+    checkApplication();
+  }, [id]);
 
   const fetchJobDetails = async () => {
     try {
       const { data, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .eq('id', id)
-        .single()
+        .from("jobs")
+        .select("*")
+        .eq("id", id)
+        .single();
 
-      if (error) throw error
-      setJob(data)
+      if (error) throw error;
+      setJob(data);
     } catch (error) {
-      console.error('Error fetching job:', error)
-      setError('Job not found')
+      console.error("Error fetching job:", error);
+      setError("Job not found");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const fetchSimilarJobs = async () => {
     try {
       const { data, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .eq('is_active', true)
-        .neq('id', id)
+        .from("jobs")
+        .select("*")
+        .eq("is_active", true)
+        .neq("id", id)
         .limit(4)
-        .order('created_at', { ascending: false })
+        .order("created_at", { ascending: false });
 
-      if (!error) setSimilarJobs(data || [])
+      if (!error) setSimilarJobs(data || []);
     } catch (error) {
-      console.error('Error fetching similar jobs:', error)
+      console.error("Error fetching similar jobs:", error);
     }
-  }
+  };
 
   const fetchComments = async () => {
     try {
       const { data, error } = await supabase
-        .from('job_comments')
-        .select(`
+        .from("job_comments")
+        .select(
+          `
           *,
           profiles:user_id (
             name,
             avatar_url
           )
-        `)
-        .eq('job_id', id)
-        .order('created_at', { ascending: false })
+        `
+        )
+        .eq("job_id", id)
+        .order("created_at", { ascending: false });
 
-      if (!error) setComments(data || [])
+      if (!error) setComments(data || []);
     } catch (error) {
-      console.error('Error fetching comments:', error)
+      console.error("Error fetching comments:", error);
     }
-  }
+  };
 
-  const handleApply = () => {
-    if (job?.application_link) {
-      window.open(job.application_link, '_blank')
-    } else {
-     console.log(`Application process for ${job.title} would open here.`)
+  const checkUserApplication = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("applications")
+        .select("*")
+        .eq("job_id", id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (data && !error) {
+        setUserHasApplied(true);
+        setUserApplication(data);
+      }
+    } catch (error) {
+      console.error("Error checking application:", error);
     }
+  };
+
+  const fetchApplicationMessages = async (applicationId) => {
+    try {
+      const { data, error } = await supabase
+        .from("application_messages")
+        .select(`
+          *,
+          sender:profiles!sender_id (full_name, avatar_url),
+          receiver:profiles!receiver_id (full_name, avatar_url)
+        `)
+        .eq("application_id", applicationId)
+        .order("created_at", { ascending: true });
+
+      if (!error) setApplicationMessages(data || []);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+    }
+  };
+
+  const handleUploadResume = async (file) => {
+    try {
+      setUploadingResume(true);
+      
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert("File size should be less than 5MB");
+        return null;
+      }
+
+      // Check file type
+      const validTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ];
+      if (!validTypes.includes(file.type)) {
+        alert("Please upload a PDF or Word document");
+        return null;
+      }
+
+      // Generate unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const filePath = `resumes/${fileName}`;
+
+      // Upload to Supabase storage
+      const { error } = await supabase.storage
+        .from('job-portal-files')
+        .upload(filePath, file);
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('job-portal-files')
+        .getPublicUrl(filePath);
+
+      setApplicationForm(prev => ({ ...prev, resume_url: publicUrl }));
+      return publicUrl;
+    } catch (error) {
+      console.error("Error uploading resume:", error);
+      alert("Error uploading resume: " + error.message);
+      return null;
+    } finally {
+      setUploadingResume(false);
+    }
+  };
+
+const handleApply = async () => {
+  try {
+    // Get the current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError) {
+      console.error("Error getting user:", userError);
+      alert("Please login to apply for this job");
+      navigate("/login");
+      return;
+    }
+    
+    if (!user) {
+      alert("Please login to apply for this job");
+      navigate("/login");
+      return;
+    }
+    
+    // Pre-fill user data if available
+    setApplicationForm(prev => ({
+      ...prev,
+      email: user.email || "",
+      full_name: user.user_metadata?.full_name || user.user_metadata?.name || ""
+    }));
+    
+    setShowApplicationModal(true);
+  } catch (error) {
+    console.error("Error in handleApply:", error);
+    alert("Please login to apply for this job");
+    navigate("/login");
   }
+};
+
+  const handleSubmitApplication = async (e) => {
+    e.preventDefault();
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert("Please login to apply");
+        return;
+      }
+
+      // Validate form
+      if (!applicationForm.full_name || !applicationForm.email || !applicationForm.resume_url) {
+        alert("Please fill all required fields and upload your resume");
+        return;
+      }
+
+      // Submit application
+      const { data, error } = await supabase
+        .from('applications')
+        .insert([{
+          job_id: id,
+          user_id: user.id,
+          full_name: applicationForm.full_name,
+          email: applicationForm.email,
+          phone: applicationForm.phone,
+          cover_letter: applicationForm.cover_letter,
+          resume_url: applicationForm.resume_url,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Create status history entry
+      await supabase
+        .from('application_status_history')
+        .insert([{
+          application_id: data.id,
+          status: 'pending',
+          notes: 'Application submitted',
+          created_at: new Date().toISOString()
+        }]);
+
+      setUserHasApplied(true);
+      setUserApplication(data);
+      setShowApplicationModal(false);
+      
+      // Reset form
+      setApplicationForm({
+        full_name: "",
+        email: "",
+        phone: "",
+        cover_letter: "",
+        resume_url: ""
+      });
+
+      alert("Application submitted successfully! We'll review your application soon.");
+    } catch (error) {
+      console.error("Error submitting application:", error);
+      alert("Error submitting application: " + error.message);
+    }
+  };
+
+  const sendMessageToAdmin = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !userApplication) return;
+
+    try {
+      setSendingMessage(true);
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Send message
+      const { error } = await supabase
+        .from('application_messages')
+        .insert([{
+          application_id: userApplication.id,
+          sender_id: user.id,
+          receiver_id: null, // Will be set to admin when they reply
+          message: newMessage,
+          is_read: false,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+
+      setNewMessage("");
+      // Refresh messages
+      fetchApplicationMessages(userApplication.id);
+      alert("Message sent to admin!");
+    } catch (error) {
+      console.error("Error sending message:", error);
+      alert("Error sending message");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
 
   const handleSaveJob = () => {
-    setSaved(!saved)
-  }
+    setSaved(!saved);
+  };
 
   const handleLikeJob = () => {
-    setLiked(!liked)
-  }
+    setLiked(!liked);
+  };
 
   const handleShare = (platform) => {
-    const url = window.location.href
-    const title = `Check out this job: ${job.title} at ${job.company}`
-    
+    const url = window.location.href;
+    const title = `Check out this job: ${job.title} at ${job.company}`;
+
     switch (platform) {
-      case 'linkedin':
-        window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank')
-        break
-      case 'twitter':
-        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`, '_blank')
-        break
-      case 'facebook':
-        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank')
-        break
-      case 'copy':
-        navigator.clipboard.writeText(url)
-        alert('Link copied to clipboard!')
-        break
+      case "linkedin":
+        window.open(
+          `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
+            url
+          )}`,
+          "_blank"
+        );
+        break;
+      case "twitter":
+        window.open(
+          `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+            title
+          )}&url=${encodeURIComponent(url)}`,
+          "_blank"
+        );
+        break;
+      case "facebook":
+        window.open(
+          `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+            url
+          )}`,
+          "_blank"
+        );
+        break;
+      case "copy":
+        navigator.clipboard.writeText(url);
+        alert("Link copied to clipboard!");
+        break;
       default:
-        break
+        break;
     }
-    setShowShareMenu(false)
-  }
+    setShowShareMenu(false);
+  };
 
   const handleAddComment = async (e) => {
-    e.preventDefault()
-    if (!newComment.trim()) return
+    e.preventDefault();
+    if (!newComment.trim()) return;
 
-    setCommentLoading(true)
+    setCommentLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       const { data, error } = await supabase
-        .from('job_comments')
+        .from("job_comments")
         .insert([
           {
             job_id: id,
             user_id: user.id,
             content: newComment,
-            rating: 5
-          }
+            rating: 5,
+          },
         ])
-        .select(`
+        .select(
+          `
           *,
           profiles:user_id (
             name,
             avatar_url
           )
-        `)
-        .single()
+        `
+        )
+        .single();
 
       if (!error) {
-        setComments([data, ...comments])
-        setNewComment('')
+        setComments([data, ...comments]);
+        setNewComment("");
       }
     } catch (error) {
-      console.error('Error adding comment:', error)
+      console.error("Error adding comment:", error);
     } finally {
-      setCommentLoading(false)
+      setCommentLoading(false);
     }
-  }
+  };
 
   const handleLikeComment = async (commentId) => {
-    // Implement comment liking functionality
-    console.log('Liked comment:', commentId)
-  }
+    console.log("Liked comment:", commentId);
+  };
 
   const getJobTypeColor = (jobType) => {
     switch (jobType) {
-      case 'internship': return 'from-green-900 to-green-700'
-      case 'full-time': return 'from-blue-900 to-blue-700'
-      case 'part-time': return 'from-purple-900 to-purple-700'
-      case 'contract': return 'from-orange-900 to-orange-700'
-      default: return 'from-gray-900 to-gray-700'
+      case "internship":
+        return "from-green-900 to-green-700";
+      case "full-time":
+        return "from-blue-900 to-blue-700";
+      case "part-time":
+        return "from-purple-900 to-purple-700";
+      case "contract":
+        return "from-orange-900 to-orange-700";
+      default:
+        return "from-gray-900 to-gray-700";
     }
-  }
+  };
 
   const getDaysRemaining = (deadline) => {
-    const today = new Date()
-    const deadlineDate = new Date(deadline)
-    const diffTime = deadlineDate - today
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    return diffDays > 0 ? diffDays : 0
-  }
+    const today = new Date();
+    const deadlineDate = new Date(deadline);
+    const diffTime = deadlineDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 0;
+  };
+
+  // Application Status Badge Component
+  const ApplicationStatusBadge = () => {
+    if (!userHasApplied || !userApplication) return null;
+
+    const statusColors = {
+      pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      reviewed: "bg-blue-100 text-blue-800 border-blue-200",
+      shortlisted: "bg-purple-100 text-purple-800 border-purple-200",
+      interviewed: "bg-indigo-100 text-indigo-800 border-indigo-200",
+      offered: "bg-green-100 text-green-800 border-green-200",
+      rejected: "bg-red-100 text-red-800 border-red-200"
+    };
+
+    return (
+      <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium border ${statusColors[userApplication.status] || 'bg-gray-100 text-gray-800 border-gray-200'} mb-4`}>
+        <FaCheckCircle className="w-4 h-4 mr-2" />
+        Application Status: {userApplication.status?.charAt(0).toUpperCase() + userApplication.status?.slice(1)}
+      </div>
+    );
+  };
+
+  // Application Modal Component
+  const ApplicationModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-8">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-2xl font-bold text-gray-900">Apply for {job.title}</h3>
+            <button
+              onClick={() => setShowApplicationModal(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <FaTimes className="w-6 h-6" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmitApplication}>
+            <div className="space-y-6">
+              {/* Personal Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={applicationForm.full_name}
+                    onChange={(e) => setApplicationForm({...applicationForm, full_name: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
+                    placeholder="John Doe"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={applicationForm.email}
+                    onChange={(e) => setApplicationForm({...applicationForm, email: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
+                    placeholder="john@example.com"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={applicationForm.phone}
+                  onChange={(e) => setApplicationForm({...applicationForm, phone: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
+                  placeholder="+1234567890"
+                />
+              </div>
+
+              {/* Resume Upload */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Resume/CV *
+                </label>
+                {applicationForm.resume_url ? (
+                  <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <FaFilePdf className="w-8 h-8 text-red-500" />
+                      <div>
+                        <p className="font-medium text-gray-900">Resume uploaded</p>
+                        <p className="text-sm text-gray-500">Click to view</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setApplicationForm({...applicationForm, resume_url: ""})}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <FaTimes className="w-5 h-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+                    <FaUpload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-2">Upload your resume (PDF or Word)</p>
+                    <input
+                      type="file"
+                      id="resume-upload"
+                      accept=".pdf,.doc,.docx"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) await handleUploadResume(file);
+                      }}
+                    />
+                    <label
+                      htmlFor="resume-upload"
+                      className="inline-flex items-center space-x-2 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg cursor-pointer transition-colors"
+                    >
+                      <FaUpload className="w-5 h-5" />
+                      <span>Choose File</span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-2">Max file size: 5MB</p>
+                  </div>
+                )}
+                {uploadingResume && (
+                  <div className="mt-2">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="bg-green-600 h-2 rounded-full animate-pulse"></div>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">Uploading...</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Cover Letter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Cover Letter
+                </label>
+                <textarea
+                  value={applicationForm.cover_letter}
+                  onChange={(e) => setApplicationForm({...applicationForm, cover_letter: e.target.value})}
+                  rows="6"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent resize-none"
+                  placeholder="Tell us why you're a great fit for this position..."
+                />
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex justify-end space-x-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowApplicationModal(false)}
+                  className="px-6 py-3 text-gray-600 hover:text-gray-900 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!applicationForm.resume_url || uploadingResume}
+                  className="px-6 py-3 bg-green-900 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-400 font-medium transition-colors flex items-center space-x-2"
+                >
+                  <FaPaperPlane className="w-5 h-5" />
+                  <span>Submit Application</span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Messages Component
+  const MessagesSection = () => (
+    <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-6 mt-8">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-xl font-bold text-gray-900">Application Messages</h3>
+        <button
+          onClick={() => setShowMessages(!showMessages)}
+          className="text-green-900 hover:text-green-800"
+        >
+          {showMessages ? <FaChevronUp /> : <FaChevronDown />}
+        </button>
+      </div>
+
+      {showMessages && (
+        <div className="space-y-6">
+          {/* Messages List */}
+          <div className="space-y-4 max-h-96 overflow-y-auto p-4 border border-gray-200 rounded-xl">
+            {applicationMessages.length === 0 ? (
+              <div className="text-center py-8">
+                <FaComment className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-600">No messages yet.</p>
+              </div>
+            ) : (
+              applicationMessages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.sender_id === (supabase.auth.getUser()?.data?.user?.id) ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`max-w-xs md:max-w-md rounded-2xl p-4 ${message.sender_id === (supabase.auth.getUser()?.data?.user?.id) ? 'bg-green-100' : 'bg-gray-100'}`}>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <FaUserCircle className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm font-medium">
+                        {message.sender?.full_name || 'Admin'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-gray-800">{message.message}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Send Message Form */}
+          <form onSubmit={sendMessageToAdmin} className="space-y-4">
+            <div className="flex space-x-4">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type your message..."
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
+              />
+              <button
+                type="submit"
+                disabled={!newMessage.trim() || sendingMessage}
+                className="px-6 py-3 bg-green-900 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-400 font-medium transition-colors flex items-center space-x-2"
+              >
+                <FaPaperPlane className="w-5 h-5" />
+                <span>{sendingMessage ? 'Sending...' : 'Send'}</span>
+              </button>
+            </div>
+            <p className="text-sm text-gray-500">Message the admin about your application</p>
+          </form>
+        </div>
+      )}
+    </div>
+  );
 
   if (loading) {
     return (
@@ -223,11 +758,13 @@ const InternshipJobDescription = () => {
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-green-900 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600 text-lg">Loading career opportunity...</p>
+            <p className="text-gray-600 text-lg">
+              Loading career opportunity...
+            </p>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (error || !job) {
@@ -239,10 +776,14 @@ const InternshipJobDescription = () => {
             <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <FaBriefcase className="w-12 h-12 text-red-900" />
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">Opportunity Not Available</h3>
-            <p className="text-gray-600 mb-8">This position is no longer available or has been filled.</p>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">
+              Opportunity Not Available
+            </h3>
+            <p className="text-gray-600 mb-8">
+              This position is no longer available or has been filled.
+            </p>
             <button
-              onClick={() => navigate('/jobs')}
+              onClick={() => navigate("/jobs")}
               className="bg-gradient-to-r from-green-900 to-green-800 hover:from-green-800 hover:to-green-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-105"
             >
               Explore Other Opportunities
@@ -250,20 +791,22 @@ const InternshipJobDescription = () => {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <Header />
-      
+
       {/* Enhanced Hero Section with E-commerce Style */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
-            
           {/* Breadcrumb */}
           <nav className="flex items-center space-x-2 text-sm text-gray-600 mb-8">
-            <button onClick={() => navigate('/jobs')} className="hover:text-green-900 transition-colors">
+            <button
+              onClick={() => navigate("/jobs")}
+              className="hover:text-green-900 transition-colors"
+            >
               Career Opportunities
             </button>
             <span>/</span>
@@ -291,23 +834,6 @@ const InternshipJobDescription = () => {
                 )}
               </div>
 
-              {/* Thumbnail Gallery */}
-              <div className="grid grid-cols-4 gap-3">
-                {[1, 2, 3, 4].map((item) => (
-                  <div key={item} className="bg-gray-100 rounded-xl aspect-square flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-green-900 transition-colors">
-                    {job.company_logo ? (
-                      <img
-                        src={job.company_logo}
-                        alt={`${job.company} ${item}`}
-                        className="w-12 h-12 object-contain"
-                      />
-                    ) : (
-                      <FaBuilding className="w-8 h-8 text-gray-400" />
-                    )}
-                  </div>
-                ))}
-              </div>
-
               {/* Trust Badges - E-commerce Style */}
               <div className="grid grid-cols-2 gap-4 pt-6 border-t border-gray-200">
                 <div className="flex items-center space-x-3 text-sm text-gray-600">
@@ -315,7 +841,6 @@ const InternshipJobDescription = () => {
                   <span>Quick Application Process</span>
                 </div>
                 <div className="flex items-center space-x-3 text-sm text-gray-600">
-                
                   <span>Verified Employer</span>
                 </div>
                 <div className="flex items-center space-x-3 text-sm text-gray-600">
@@ -335,9 +860,11 @@ const InternshipJobDescription = () => {
               <div className="flex items-start justify-between">
                 <div>
                   <span className="inline-flex items-center px-4 py-2 rounded-2xl text-sm font-semibold text-white bg-gradient-to-r from-green-900 to-green-700 shadow-lg mb-3">
-                    {job.job_type.replace('-', ' ').toUpperCase()}
+                    {job.job_type.replace("-", " ").toUpperCase()}
                   </span>
-                  <h1 className="text-4xl font-bold text-gray-900 mb-2">{job.title}</h1>
+                  <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                    {job.title}
+                  </h1>
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-2">
                       {job.company_logo && (
@@ -347,7 +874,9 @@ const InternshipJobDescription = () => {
                           className="w-8 h-8 rounded-lg object-cover"
                         />
                       )}
-                      <span className="text-xl text-green-900 font-semibold">{job.company}</span>
+                      <span className="text-xl text-green-900 font-semibold">
+                        {job.company}
+                      </span>
                     </div>
                     <div className="flex items-center space-x-4 text-gray-500">
                       <button
@@ -367,23 +896,33 @@ const InternshipJobDescription = () => {
                       >
                         <FaShare className="w-5 h-5" />
                         <span>Share</span>
-                        
+
                         {showShareMenu && (
                           <div className="absolute top-8 right-0 bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 min-w-48 z-50">
                             <div className="space-y-2">
-                              {['linkedin', 'twitter', 'facebook', 'copy'].map((platform) => (
-                                <button
-                                  key={platform}
-                                  onClick={() => handleShare(platform)}
-                                  className="flex items-center space-x-3 w-full p-3 rounded-xl hover:bg-gray-50 transition-colors text-gray-700 capitalize"
-                                >
-                                  {platform === 'linkedin' && <FaLinkedin className="w-5 h-5 text-blue-600" />}
-                                  {platform === 'twitter' && <FaTwitter className="w-5 h-5 text-blue-400" />}
-                                  {platform === 'facebook' && <FaFacebook className="w-5 h-5 text-blue-600" />}
-                                  {platform === 'copy' && <FaLink className="w-5 h-5 text-gray-600" />}
-                                  <span>Share on {platform}</span>
-                                </button>
-                              ))}
+                              {["linkedin", "twitter", "facebook", "copy"].map(
+                                (platform) => (
+                                  <button
+                                    key={platform}
+                                    onClick={() => handleShare(platform)}
+                                    className="flex items-center space-x-3 w-full p-3 rounded-xl hover:bg-gray-50 transition-colors text-gray-700 capitalize"
+                                  >
+                                    {platform === "linkedin" && (
+                                      <FaLinkedin className="w-5 h-5 text-blue-600" />
+                                    )}
+                                    {platform === "twitter" && (
+                                      <FaTwitter className="w-5 h-5 text-blue-400" />
+                                    )}
+                                    {platform === "facebook" && (
+                                      <FaFacebook className="w-5 h-5 text-blue-600" />
+                                    )}
+                                    {platform === "copy" && (
+                                      <FaLink className="w-5 h-5 text-gray-600" />
+                                    )}
+                                    <span>Share on {platform}</span>
+                                  </button>
+                                )
+                              )}
                             </div>
                           </div>
                         )}
@@ -396,7 +935,9 @@ const InternshipJobDescription = () => {
               {/* Price & Rating - E-commerce Style */}
               <div className="flex items-center space-x-6 py-4 border-y border-gray-200">
                 <div>
-                  <span className="text-2xl font-bold text-gray-900">{job.salary_range || 'Competitive Salary'}</span>
+                  <span className="text-2xl font-bold text-gray-900">
+                    {job.salary_range || "Competitive Salary"}
+                  </span>
                   <p className="text-sm text-gray-600">Monthly compensation</p>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -414,21 +955,27 @@ const InternshipJobDescription = () => {
                 <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
                   <FaMapMarkerAlt className="w-5 h-5 text-green-900" />
                   <div>
-                    <p className="font-semibold text-gray-900">{job.location}</p>
+                    <p className="font-semibold text-gray-900">
+                      {job.location}
+                    </p>
                     <p className="text-sm text-gray-600">Location</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
                   <FaBriefcase className="w-5 h-5 text-green-900" />
                   <div>
-                    <p className="font-semibold text-gray-900 capitalize">{job.job_type.replace('-', ' ')}</p>
+                    <p className="font-semibold text-gray-900 capitalize">
+                      {job.job_type.replace("-", " ")}
+                    </p>
                     <p className="text-sm text-gray-600">Employment Type</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
                   <FaGraduationCap className="w-5 h-5 text-green-900" />
                   <div>
-                    <p className="font-semibold text-gray-900">{job.category}</p>
+                    <p className="font-semibold text-gray-900">
+                      {job.category}
+                    </p>
                     <p className="text-sm text-gray-600">Field</p>
                   </div>
                 </div>
@@ -436,29 +983,61 @@ const InternshipJobDescription = () => {
                   <FaCalendarAlt className="w-5 h-5 text-green-900" />
                   <div>
                     <p className="font-semibold text-gray-900">
-                      {job.deadline ? new Date(job.deadline).toLocaleDateString() : 'Open'}
+                      {job.deadline
+                        ? new Date(job.deadline).toLocaleDateString()
+                        : "Open"}
                     </p>
                     <p className="text-sm text-gray-600">Deadline</p>
                   </div>
                 </div>
               </div>
 
-              {/* CTA Section */}
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to advance your career?</h3>
-                    <p className="text-gray-600">Join {job.company} and take the next step in your professional journey</p>
+              {/* Application Status */}
+              {userHasApplied && (
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                        Application Submitted ✓
+                      </h4>
+                      <ApplicationStatusBadge />
+                      <p className="text-sm text-gray-600">
+                        Applied on: {new Date(userApplication.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigate("/message")}
+                      className="text-green-900 hover:text-green-800 font-medium flex items-center space-x-2"
+                    >
+                      <FaEnvelope className="w-5 h-5" />
+                      <span>View Messages</span>
+                    </button>
                   </div>
-                  <button
-                    onClick={handleApply}
-                    className="bg-gradient-to-r from-green-900 to-green-800 hover:from-green-800 hover:to-green-700 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 flex items-center space-x-3 shadow-lg"
-                  >
-                    <FaShoppingBag className="w-5 h-5" />
-                    <span>Apply Now</span>
-                  </button>
                 </div>
-              </div>
+              )}
+
+              {/* CTA Button */}
+              {!userHasApplied && (
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        Ready to advance your career?
+                      </h3>
+                      <p className="text-gray-600">
+                        Join {job.company} and take the next step in your professional journey
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleApply}
+                      className="bg-gradient-to-r from-green-900 to-green-800 hover:from-green-800 hover:to-green-700 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 flex items-center space-x-3 shadow-lg"
+                    >
+                      <FaShoppingBag className="w-5 h-5" />
+                      <span>Apply Now</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Quick Stats */}
               <div className="grid grid-cols-3 gap-4 text-center">
@@ -467,7 +1046,9 @@ const InternshipJobDescription = () => {
                   <div className="text-sm text-gray-600">Applications</div>
                 </div>
                 <div className="p-4 bg-white rounded-xl border border-gray-200">
-                  <div className="text-2xl font-bold text-gray-900">{getDaysRemaining(job.deadline)}</div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {getDaysRemaining(job.deadline)}
+                  </div>
                   <div className="text-sm text-gray-600">Days Left</div>
                 </div>
                 <div className="p-4 bg-white rounded-xl border border-gray-200">
@@ -486,62 +1067,77 @@ const InternshipJobDescription = () => {
           {/* Main Content */}
           <div className="lg:col-span-2">
             {/* Tab Navigation */}
-            <div className="flex space-x-1 bg-gray-100 rounded-2xl p-1 mb-8">
-              {['description', 'requirements', 'benefits', 'reviews'].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex-1 py-4 px-6 rounded-xl font-semibold transition-all duration-300 capitalize ${
-                    activeTab === tab
-                      ? 'bg-white text-green-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
+            <div className="flex space-x-1 mb-8">
+  <div className="flex overflow-x-auto scrollbar-hide pb-2 -mx-2 px-2">
+    {["description", "requirements", "benefits", "reviews"].map(
+      (tab) => (
+        <button
+          key={tab}
+          onClick={() => setActiveTab(tab)}
+          className={`flex-shrink-0 py-4 px-6 rounded-xl font-semibold transition-all duration-300 capitalize whitespace-nowrap ${
+            activeTab === tab
+              ? "bg-green-900 text-white shadow-sm"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          }`}
+        >
+          {tab}
+        </button>
+      )
+    )}
+  </div>
+</div>
 
             {/* Tab Content */}
             <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-8">
-              {activeTab === 'description' && (
+              {activeTab === "description" && (
                 <div className="prose prose-lg max-w-none">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-6">Position Overview</h3>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-6">
+                    Position Overview
+                  </h3>
                   <div className="text-gray-700 leading-relaxed space-y-4">
-                    {job.description.split('\n').map((paragraph, index) => (
+                    {job.description.split("\n").map((paragraph, index) => (
                       <p key={index}>{paragraph}</p>
                     ))}
                   </div>
                 </div>
               )}
 
-              {activeTab === 'requirements' && (
+              {activeTab === "requirements" && (
                 <div className="prose prose-lg max-w-none">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-6">Qualifications & Requirements</h3>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-6">
+                    Qualifications & Requirements
+                  </h3>
                   <div className="space-y-4">
-                    {job.requirements.split('\n').map((requirement, index) => (
-                      <div key={index} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl">
+                    {job.requirements.split("\n").map((requirement, index) => (
+                      <div
+                        key={index}
+                        className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl"
+                      >
                         <FaCheckCircle className="w-6 h-6 text-green-900 mt-1 flex-shrink-0" />
-                        <span className="text-gray-700 text-lg">{requirement}</span>
+                        <span className="text-gray-700 text-lg">
+                          {requirement}
+                        </span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {activeTab === 'benefits' && (
+              {activeTab === "benefits" && (
                 <div className="prose prose-lg max-w-none">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-6">Benefits & Perks</h3>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-6">
+                    Benefits & Perks
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {[
-                      'Professional mentorship program',
-                      'Career development training',
-                      'Networking opportunities',
-                      'Flexible work arrangements',
-                      'Health insurance coverage',
-                      'Performance bonuses',
-                      'Remote work options',
-                      'Team building activities'
+                      "Professional mentorship program",
+                      "Career development training",
+                      "Networking opportunities",
+                      "Flexible work arrangements",
+                      "Health insurance coverage",
+                      "Performance bonuses",
+                      "Remote work options",
+                      "Team building activities",
                     ].map((benefit, index) => (
                       <div key={index} className="flex items-center space-x-3">
                         <FaAward className="w-5 h-5 text-green-900 flex-shrink-0" />
@@ -552,13 +1148,20 @@ const InternshipJobDescription = () => {
                 </div>
               )}
 
-              {activeTab === 'reviews' && (
+              {activeTab === "reviews" && (
                 <div className="space-y-6">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-6">Candidate Reviews</h3>
-                  
+                  <h3 className="text-2xl font-bold text-gray-900 mb-6">
+                    Candidate Reviews
+                  </h3>
+
                   {/* Add Comment Form */}
-                  <form onSubmit={handleAddComment} className="bg-gray-50 rounded-2xl p-6 mb-8">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Share Your Experience</h4>
+                  <form
+                    onSubmit={handleAddComment}
+                    className="bg-gray-50 rounded-2xl p-6 mb-8"
+                  >
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                      Share Your Experience
+                    </h4>
                     <div className="space-y-4">
                       <textarea
                         value={newComment}
@@ -573,7 +1176,9 @@ const InternshipJobDescription = () => {
                         className="bg-gradient-to-r from-green-900 to-green-800 hover:from-green-800 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-500 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-105 disabled:hover:scale-100 flex items-center space-x-2"
                       >
                         <FaPaperPlane className="w-4 h-4" />
-                        <span>{commentLoading ? 'Posting...' : 'Post Review'}</span>
+                        <span>
+                          {commentLoading ? "Posting..." : "Post Review"}
+                        </span>
                       </button>
                     </div>
                   </form>
@@ -583,11 +1188,16 @@ const InternshipJobDescription = () => {
                     {comments.length === 0 ? (
                       <div className="text-center py-12">
                         <FaComment className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-600">No reviews yet. Be the first to share your experience!</p>
+                        <p className="text-gray-600">
+                          No reviews yet. Be the first to share your experience!
+                        </p>
                       </div>
                     ) : (
                       comments.map((comment) => (
-                        <div key={comment.id} className="bg-white border border-gray-200 rounded-2xl p-6">
+                        <div
+                          key={comment.id}
+                          className="bg-white border border-gray-200 rounded-2xl p-6"
+                        >
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center space-x-3">
                               {comment.profiles?.avatar_url ? (
@@ -600,15 +1210,22 @@ const InternshipJobDescription = () => {
                                 <FaUserCircle className="w-12 h-12 text-gray-400" />
                               )}
                               <div>
-                                <h5 className="font-semibold text-gray-900">{comment.profiles?.name || 'Anonymous'}</h5>
+                                <h5 className="font-semibold text-gray-900">
+                                  {comment.profiles?.name || "Anonymous"}
+                                </h5>
                                 <div className="flex items-center space-x-2">
                                   <div className="flex">
                                     {[1, 2, 3, 4, 5].map((star) => (
-                                      <FaStar key={star} className="w-4 h-4 text-yellow-400" />
+                                      <FaStar
+                                        key={star}
+                                        className="w-4 h-4 text-yellow-400"
+                                      />
                                     ))}
                                   </div>
                                   <span className="text-sm text-gray-500">
-                                    {new Date(comment.created_at).toLocaleDateString()}
+                                    {new Date(
+                                      comment.created_at
+                                    ).toLocaleDateString()}
                                   </span>
                                 </div>
                               </div>
@@ -621,7 +1238,9 @@ const InternshipJobDescription = () => {
                               <span className="text-sm">12</span>
                             </button>
                           </div>
-                          <p className="text-gray-700 leading-relaxed">{comment.content}</p>
+                          <p className="text-gray-700 leading-relaxed">
+                            {comment.content}
+                          </p>
                         </div>
                       ))
                     )}
@@ -629,13 +1248,18 @@ const InternshipJobDescription = () => {
                 </div>
               )}
             </div>
+
+            {/* Messages Section (only for applicants) */}
+            {userHasApplied && <MessagesSection />}
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Similar Opportunities */}
             <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Similar Opportunities</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                Similar Opportunities
+              </h3>
               <div className="space-y-4">
                 {similarJobs.map((similarJob) => (
                   <div
@@ -655,13 +1279,17 @@ const InternshipJobDescription = () => {
                         <h4 className="font-semibold text-gray-900 group-hover:text-green-900 transition-colors mb-1">
                           {similarJob.title}
                         </h4>
-                        <p className="text-green-900 text-sm font-medium mb-2">{similarJob.company}</p>
+                        <p className="text-green-900 text-sm font-medium mb-2">
+                          {similarJob.company}
+                        </p>
                         <div className="flex items-center space-x-4 text-xs text-gray-600">
                           <span className="flex items-center space-x-1">
                             <FaMapMarkerAlt className="w-3 h-3" />
                             <span>{similarJob.location}</span>
                           </span>
-                          <span className="capitalize">{similarJob.job_type.replace('-', ' ')}</span>
+                          <span className="capitalize">
+                            {similarJob.job_type.replace("-", " ")}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -671,28 +1299,28 @@ const InternshipJobDescription = () => {
             </div>
 
             {/* Career Support */}
-            <div className="bg-gradient-to-br from-green-950 to-green-800 rounded-3xl p-6 text-white">
-              <h3 className="text-xl font-bold mb-4">Career Support</h3>
-              <div className="space-y-3">
-                <button className="w-full bg-white/10 hover:bg-white/20 text-white py-3 px-4 rounded-xl font-semibold transition-all duration-300 text-left flex items-center space-x-3">
-                  <FaGraduationCap className="w-5 h-5" />
-                  <span>Schedule Consultation</span>
-                </button>
-                <button className="w-full bg-white/10 hover:bg-white/20 text-white py-3 px-4 rounded-xl font-semibold transition-all duration-300 text-left flex items-center space-x-3">
-                  <FaUsers className="w-5 h-5" />
-                  <span>Resume Review</span>
-                </button>
-                <button className="w-full bg-white/10 hover:bg-white/20 text-white py-3 px-4 rounded-xl font-semibold transition-all duration-300 text-left flex items-center space-x-3">
-                  <FaAward className="w-5 h-5" />
-                  <span>Interview Prep</span>
-                </button>
-              </div>
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-3xl p-6 border border-blue-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Need Help with Your Application?
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Our career advisors are here to help you prepare the perfect application.
+              </p>
+              <button
+                onClick={() => navigate("/career-support")}
+                className="w-full bg-white border border-blue-300 text-blue-900 hover:bg-blue-50 py-3 rounded-xl font-medium transition-colors"
+              >
+                Get Career Support
+              </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  )
-}
 
-export default InternshipJobDescription
+      {/* Application Modal */}
+      {showApplicationModal && <ApplicationModal />}
+    </div>
+  );
+};
+
+export default InternshipJobDescription;

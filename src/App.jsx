@@ -12,6 +12,8 @@ import About from "./pages/About";
 import Profile from "./pages/Profile";
 import Message from "./pages/Message";
 import InternshipJobDescription from "./pages/InternshipJobDescription";
+import AdminJobs from "./adminPage/adminPanel";
+import MyApplications from "./pages/MyApplication";
 
 const App = () => {
   return (
@@ -55,6 +57,14 @@ const App = () => {
         }
       />
       <Route
+        path="/adminpage"
+        element={
+          <ProtectedRoute>
+            <AdminJobs />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/profile"
         element={
           <ProtectedRoute>
@@ -83,6 +93,14 @@ const App = () => {
         element={
           <ProtectedRoute>
             <InternshipJobDescription />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/whistlist"
+        element={
+          <ProtectedRoute>
+            <MyApplications />
           </ProtectedRoute>
         }
       />

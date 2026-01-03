@@ -107,17 +107,17 @@ const Home = () => {
       </div>
 
       {/* Premium Hero Slider */}
-      <div className="slider-container pt-5 md:pt-20 relative">
+      <div className="slider-container py-2 md:pt- relative">
         <Slider {...settings}>
-          <div className="relative w-full h-[400px] md:h-[700px] overflow-hidden">
+          <div className="relative w-full h-[450px] md:h-[700px] overflow-hidden">
             <img
               src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
               alt="Corporate Leadership"
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 to-gray-900/50 flex items-center justify-start">
+            <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 to-gray-900/50 flex items-center justify-start ">
               <div className="text-white px-8 md:px-20 max-w-3xl">
-                <div className="flex items-center space-x-4 mb-4">
+                <div className="flex items-center space-x-4 mb-4 ">
                   <div className="w-2 h-12 bg-gradient-to-b from-red-900 to-green-900 rounded-full"></div>
                   <span className="text-green-300 font-semibold tracking-wider">PREMIUM CAREER PLATFORM</span>
                 </div>
@@ -132,15 +132,13 @@ const Home = () => {
                     <BiBriefcase className="w-6 h-6" />
                     <span>Explore Executive Opportunities</span>
                   </button>
-                  <button className="border-2 border-white/30 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:bg-white/10 backdrop-blur-sm">
-                    Schedule Consultation
-                  </button>
+                 
                 </div>
               </div>
             </div>
           </div>
           
-          <div className="relative w-full h-[400px] md:h-[700px] overflow-hidden">
+          <div className="relative w-full h-[450px] md:h-[700px] overflow-hidden">
             <img
               src="https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
               alt="Technology Innovation"
@@ -163,9 +161,7 @@ const Home = () => {
                     <FaLaptopCode className="w-6 h-6" />
                     <span>Tech Opportunities</span>
                   </button>
-                  <button className="border-2 border-white/30 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:bg-white/10 backdrop-blur-sm">
-                    View Innovation Partners
-                  </button>
+                 
                 </div>
               </div>
             </div>
@@ -303,7 +299,8 @@ const Home = () => {
                   />
                 </div>
               </div>
-              <button className="bg-white text-green-900 px-8 py-4 rounded-xl font-semibold hover:bg-green-50 transition-all duration-300 hover:scale-105 shadow-lg flex items-center space-x-3">
+              <button className="bg-white text-green-900 px-8 py-4 rounded-xl font-semibold hover:bg-green-50 transition-all duration-300 hover:scale-105 shadow-lg flex items-center space-x-3"
+               onClick={() => navigate("/jobs")}>
                 <BiStats className="w-6 h-6" />
                 <span>Advanced Search</span>
               </button>
