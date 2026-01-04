@@ -135,7 +135,7 @@ const Profile = () => {
             <div className="relative group">
               <div className="relative">
                 <img
-                  src={preview || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&h=150&q=80"}
+                  src={preview || "https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_Placeholder.png"}
                   alt="Profile"
                   className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border-4 border-green-300 shadow-2xl"
                 />
