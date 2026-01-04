@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import Header from "../components/Header";
@@ -44,7 +50,7 @@ import {
   FaFileAlt,
   FaTimes,
   FaPaperclip,
-  FaDownload
+  FaDownload,
 } from "react-icons/fa";
 
 // Extracted Components
@@ -57,26 +63,33 @@ const ApplicationStatusBadge = ({ userApplication }) => {
     shortlisted: "bg-purple-100 text-purple-800 border-purple-200",
     interviewed: "bg-indigo-100 text-indigo-800 border-indigo-200",
     offered: "bg-green-100 text-green-800 border-green-200",
-    rejected: "bg-red-100 text-red-800 border-red-200"
+    rejected: "bg-red-100 text-red-800 border-red-200",
   };
 
   return (
-    <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium border ${statusColors[userApplication.status] || 'bg-gray-100 text-gray-800 border-gray-200'} mb-4`}>
+    <div
+      className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium border ${
+        statusColors[userApplication.status] ||
+        "bg-gray-100 text-gray-800 border-gray-200"
+      } mb-4`}
+    >
       <FaCheckCircle className="w-4 h-4 mr-2" />
-      Application Status: {userApplication.status?.charAt(0).toUpperCase() + userApplication.status?.slice(1)}
+      Application Status:{" "}
+      {userApplication.status?.charAt(0).toUpperCase() +
+        userApplication.status?.slice(1)}
     </div>
   );
 };
 
-const MessagesSection = ({ 
-  applicationMessages, 
-  showMessages, 
-  newMessage, 
-  sendingMessage, 
+const MessagesSection = ({
+  applicationMessages,
+  showMessages,
+  newMessage,
+  sendingMessage,
   currentUserId,
-  onToggleMessages, 
-  onSendMessage, 
-  onNewMessageChange 
+  onToggleMessages,
+  onSendMessage,
+  onNewMessageChange,
 }) => {
   const messagesEndRef = useRef(null);
 
@@ -89,7 +102,9 @@ const MessagesSection = ({
   return (
     <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-6 mt-8 overflow-hidden">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-bold text-gray-900">Application Messages</h3>
+        <h3 className="text-xl font-bold text-gray-900">
+          Application Messages
+        </h3>
         <button
           onClick={onToggleMessages}
           className="text-green-900 hover:text-green-800"
@@ -110,16 +125,29 @@ const MessagesSection = ({
               applicationMessages.map((message) => (
                 <div
                   key={message.id}
-                  className={`flex ${message.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${
+                    message.sender_id === currentUserId
+                      ? "justify-end"
+                      : "justify-start"
+                  }`}
                 >
-                  <div className={`max-w-xs md:max-w-md rounded-2xl p-4 ${message.sender_id === currentUserId ? 'bg-green-100' : 'bg-gray-100'}`}>
+                  <div
+                    className={`max-w-xs md:max-w-md rounded-2xl p-4 ${
+                      message.sender_id === currentUserId
+                        ? "bg-green-100"
+                        : "bg-gray-100"
+                    }`}
+                  >
                     <div className="flex items-center space-x-2 mb-2">
                       <FaUserCircle className="w-4 h-4 text-gray-500" />
                       <span className="text-sm font-medium">
-                        {message.sender?.full_name || 'Admin'}
+                        {message.sender?.full_name || "Admin"}
                       </span>
                       <span className="text-xs text-gray-500">
-                        {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(message.created_at).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </span>
                     </div>
                     <p className="text-gray-800">{message.message}</p>
@@ -146,10 +174,12 @@ const MessagesSection = ({
                 className="px-6 py-3 bg-green-900 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-400 font-medium transition-colors flex items-center space-x-2"
               >
                 <FaPaperPlane className="w-5 h-5" />
-                <span>{sendingMessage ? 'Sending...' : 'Send'}</span>
+                <span>{sendingMessage ? "Sending..." : "Send"}</span>
               </button>
             </div>
-            <p className="text-sm text-gray-500">Message the admin about your application</p>
+            <p className="text-sm text-gray-500">
+              Message the admin about your application
+            </p>
           </form>
         </div>
       )}
@@ -179,9 +209,10 @@ const InternshipJobDescription = () => {
     email: "",
     phone: "",
     cover_letter: "",
-    resume_url: ""
+    resume_url: "",
   });
   const [uploadingResume, setUploadingResume] = useState(false);
+  
   const [userHasApplied, setUserHasApplied] = useState(false);
   const [userApplication, setUserApplication] = useState(null);
   const [applicationMessages, setApplicationMessages] = useState([]);
@@ -193,7 +224,7 @@ const InternshipJobDescription = () => {
   // Fixed: Separate data fetching from user-specific checks
   useEffect(() => {
     const abortController = new AbortController();
-    
+
     if (id) {
       fetchJobDetails(abortController.signal);
       fetchSimilarJobs(abortController.signal);
@@ -209,21 +240,23 @@ const InternshipJobDescription = () => {
   useEffect(() => {
     const checkUserApplication = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (!user || !id) {
           setCurrentUserId(null);
           return;
         }
 
         setCurrentUserId(user.id);
-        
+
         const { data, error } = await supabase
-          .from('applications')
-          .select('*')
-          .eq('job_id', id)
-          .eq('user_id', user.id)
+          .from("applications")
+          .select("*")
+          .eq("job_id", id)
+          .eq("user_id", user.id)
           .maybeSingle(); // Use maybeSingle instead of single
-        
+
         if (data) {
           setUserHasApplied(true);
           setUserApplication(data);
@@ -237,84 +270,95 @@ const InternshipJobDescription = () => {
         setUserHasApplied(false);
       }
     };
-    
+
     checkUserApplication();
   }, [id]);
 
   // Fixed: Use useCallback with proper dependencies
-  const fetchJobDetails = useCallback(async (signal) => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("jobs")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle(); // Use maybeSingle to handle no results
+  const fetchJobDetails = useCallback(
+    async (signal) => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle(); // Use maybeSingle to handle no results
 
-      if (error) throw error;
-      if (!data) {
-        setError("Job not found");
-        return;
+        if (error) throw error;
+        if (!data) {
+          setError("Job not found");
+          return;
+        }
+        setJob(data);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        console.error("Error fetching job:", error);
+        setError("Failed to load job details");
+      } finally {
+        setLoading(false);
       }
-      setJob(data);
-    } catch (error) {
-      if (error.name === 'AbortError') return;
-      console.error("Error fetching job:", error);
-      setError("Failed to load job details");
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+    },
+    [id]
+  );
 
-  const fetchSimilarJobs = useCallback(async (signal) => {
-    try {
-      const { data, error } = await supabase
-        .from("jobs")
-        .select("*")
-        .eq("is_active", true)
-        .neq("id", id)
-        .limit(4)
-        .order("created_at", { ascending: false });
+  const fetchSimilarJobs = useCallback(
+    async (signal) => {
+      try {
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("*")
+          .eq("is_active", true)
+          .neq("id", id)
+          .limit(4)
+          .order("created_at", { ascending: false });
 
-      if (!error) setSimilarJobs(data || []);
-    } catch (error) {
-      if (error.name === 'AbortError') return;
-      console.error("Error fetching similar jobs:", error);
-    }
-  }, [id]);
+        if (!error) setSimilarJobs(data || []);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        console.error("Error fetching similar jobs:", error);
+      }
+    },
+    [id]
+  );
 
-  const fetchComments = useCallback(async (signal) => {
-    try {
-      const { data, error } = await supabase
-        .from("job_comments")
-        .select(
-          `
+  const fetchComments = useCallback(
+    async (signal) => {
+      try {
+        const { data, error } = await supabase
+          .from("job_reviews")
+          .select(
+            `
           *,
           profiles:user_id (
             name,
             avatar_url
           )
         `
-        )
-        .eq("job_id", id)
-        .order("created_at", { ascending: false });
+          )
+          .eq("job_id", id)
+          .order("created_at", { ascending: false });
 
-      if (!error) setComments(data || []);
-    } catch (error) {
-      if (error.name === 'AbortError') return;
-      console.error("Error fetching comments:", error);
-    }
-  }, [id]);
+        if (!error) setComments(data || []);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        console.error("Error fetching comments:", error);
+      }
+    },
+    [id]
+  );
 
   const fetchApplicationMessages = useCallback(async (applicationId) => {
     try {
       const { data, error } = await supabase
         .from("application_messages")
-        .select(`
+        .select(
+          `
           *,
           sender:profiles!sender_id (full_name, avatar_url),
           receiver:profiles!receiver_id (full_name, avatar_url)
-        `)
+        `
+        )
         .eq("application_id", applicationId)
         .order("created_at", { ascending: true });
 
@@ -325,12 +369,15 @@ const InternshipJobDescription = () => {
   }, []);
 
   // Fixed: Stable input handlers
-  const handleInputChange = useCallback((field) => (e) => {
-    setApplicationForm(prev => ({
-      ...prev,
-      [field]: e.target.value
-    }));
-  }, []);
+  const handleInputChange = useCallback(
+    (field) => (e) => {
+      setApplicationForm((prev) => ({
+        ...prev,
+        [field]: e.target.value,
+      }));
+    },
+    []
+  );
 
   const handleNewMessageChange = useCallback((e) => {
     setNewMessage(e.target.value);
@@ -343,7 +390,7 @@ const InternshipJobDescription = () => {
   const handleUploadResume = useCallback(async (file) => {
     try {
       setUploadingResume(true);
-      
+
       const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
       if (file.size > MAX_FILE_SIZE) {
         alert("File size should be less than 5MB");
@@ -353,28 +400,30 @@ const InternshipJobDescription = () => {
       const validTypes = [
         "application/pdf",
         "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ];
       if (!validTypes.includes(file.type)) {
         alert("Please upload a PDF or Word document");
         return null;
       }
 
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2)}.${fileExt}`;
       const filePath = `resumes/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('job-portal-files')
+        .from("job-portal-files")
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('job-portal-files')
-        .getPublicUrl(filePath);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("job-portal-files").getPublicUrl(filePath);
 
-      setApplicationForm(prev => ({ ...prev, resume_url: publicUrl }));
+      setApplicationForm((prev) => ({ ...prev, resume_url: publicUrl }));
       return publicUrl;
     } catch (error) {
       console.error("Error uploading resume:", error);
@@ -387,21 +436,25 @@ const InternshipJobDescription = () => {
 
   const handleApply = useCallback(async () => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
       if (userError || !user) {
         alert("Please login to apply for this job");
         navigate("/login");
         return;
       }
-      
+
       // Pre-fill user data
-      setApplicationForm(prev => ({
+      setApplicationForm((prev) => ({
         ...prev,
         email: user.email || "",
-        full_name: user.user_metadata?.full_name || user.user_metadata?.name || ""
+        full_name:
+          user.user_metadata?.full_name || user.user_metadata?.name || "",
       }));
-      
+
       setShowApplicationModal(true);
     } catch (error) {
       console.error("Error in handleApply:", error);
@@ -410,181 +463,168 @@ const InternshipJobDescription = () => {
     }
   }, [navigate]);
 
-  const handleSubmitApplication = useCallback(async (e) => {
-    e.preventDefault();
-    
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        alert("Please login to apply");
-        return;
+  const handleSubmitApplication = useCallback(
+    async (e) => {
+      e.preventDefault();
+
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          alert("Please login to apply");
+          return;
+        }
+
+        if (
+          !applicationForm.full_name ||
+          !applicationForm.email ||
+          !applicationForm.resume_url
+        ) {
+          alert("Please fill all required fields and upload your resume");
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("applications")
+          .insert([
+            {
+              job_id: id,
+              user_id: user.id,
+              full_name: applicationForm.full_name,
+              email: applicationForm.email,
+              phone: applicationForm.phone,
+              cover_letter: applicationForm.cover_letter,
+              resume_url: applicationForm.resume_url,
+              status: "pending",
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        await supabase.from("application_status_history").insert([
+          {
+            application_id: data.id,
+            status: "pending",
+            notes: "Application submitted",
+            created_at: new Date().toISOString(),
+          },
+        ]);
+
+        setUserHasApplied(true);
+        setUserApplication(data);
+        setShowApplicationModal(false);
+
+        setApplicationForm({
+          full_name: "",
+          email: "",
+          phone: "",
+          cover_letter: "",
+          resume_url: "",
+        });
+
+        alert(
+          "Application submitted successfully! We'll review your application soon."
+        );
+      } catch (error) {
+        console.error("Error submitting application:", error);
+        alert("Error submitting application: " + error.message);
       }
+    },
+    [id, applicationForm, supabase]
+  );
 
-      if (!applicationForm.full_name || !applicationForm.email || !applicationForm.resume_url) {
-        alert("Please fill all required fields and upload your resume");
-        return;
+  const sendMessageToAdmin = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (!newMessage.trim() || !userApplication) return;
+
+      try {
+        setSendingMessage(true);
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        const { error } = await supabase.from("application_messages").insert([
+          {
+            application_id: userApplication.id,
+            sender_id: user.id,
+            receiver_id: null,
+            message: newMessage,
+            is_read: false,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+
+        if (error) throw error;
+
+        setNewMessage("");
+        fetchApplicationMessages(userApplication.id);
+        alert("Message sent to admin!");
+      } catch (error) {
+        console.error("Error sending message:", error);
+        alert("Error sending message");
+      } finally {
+        setSendingMessage(false);
       }
-
-      const { data, error } = await supabase
-        .from('applications')
-        .insert([{
-          job_id: id,
-          user_id: user.id,
-          full_name: applicationForm.full_name,
-          email: applicationForm.email,
-          phone: applicationForm.phone,
-          cover_letter: applicationForm.cover_letter,
-          resume_url: applicationForm.resume_url,
-          status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      await supabase
-        .from('application_status_history')
-        .insert([{
-          application_id: data.id,
-          status: 'pending',
-          notes: 'Application submitted',
-          created_at: new Date().toISOString()
-        }]);
-
-      setUserHasApplied(true);
-      setUserApplication(data);
-      setShowApplicationModal(false);
-      
-      setApplicationForm({
-        full_name: "",
-        email: "",
-        phone: "",
-        cover_letter: "",
-        resume_url: ""
-      });
-
-      alert("Application submitted successfully! We'll review your application soon.");
-    } catch (error) {
-      console.error("Error submitting application:", error);
-      alert("Error submitting application: " + error.message);
-    }
-  }, [id, applicationForm, supabase]);
-
-  const sendMessageToAdmin = useCallback(async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !userApplication) return;
-
-    try {
-      setSendingMessage(true);
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const { error } = await supabase
-        .from('application_messages')
-        .insert([{
-          application_id: userApplication.id,
-          sender_id: user.id,
-          receiver_id: null,
-          message: newMessage,
-          is_read: false,
-          created_at: new Date().toISOString()
-        }]);
-
-      if (error) throw error;
-
-      setNewMessage("");
-      fetchApplicationMessages(userApplication.id);
-      alert("Message sent to admin!");
-    } catch (error) {
-      console.error("Error sending message:", error);
-      alert("Error sending message");
-    } finally {
-      setSendingMessage(false);
-    }
-  }, [userApplication, newMessage, fetchApplicationMessages]);
+    },
+    [userApplication, newMessage, fetchApplicationMessages]
+  );
 
   const handleSaveJob = useCallback(() => {
-    setSaved(prev => !prev);
+    setSaved((prev) => !prev);
   }, []);
 
   const handleLikeJob = useCallback(() => {
-    setLiked(prev => !prev);
+    setLiked((prev) => !prev);
   }, []);
 
-  const handleShare = useCallback((platform) => {
-    const url = window.location.href;
-    const title = `Check out this job: ${job?.title} at ${job?.company}`;
+  const handleShare = useCallback(
+    (platform) => {
+      const url = window.location.href;
+      const title = `Check out this job: ${job?.title} at ${job?.company}`;
 
-    switch (platform) {
-      case "linkedin":
-        window.open(
-          `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
-          "_blank"
-        );
-        break;
-      case "twitter":
-        window.open(
-          `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`,
-          "_blank"
-        );
-        break;
-      case "facebook":
-        window.open(
-          `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-          "_blank"
-        );
-        break;
-      case "copy":
-        navigator.clipboard.writeText(url);
-        alert("Link copied to clipboard!");
-        break;
-      default:
-        break;
-    }
-    setShowShareMenu(false);
-  }, [job]);
-
-  const handleAddComment = useCallback(async (e) => {
-    e.preventDefault();
-    if (!newComment.trim()) return;
-
-    setCommentLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        alert("Please login to add a comment");
-        return;
+      switch (platform) {
+        case "linkedin":
+          window.open(
+            `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
+              url
+            )}`,
+            "_blank"
+          );
+          break;
+        case "twitter":
+          window.open(
+            `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+              title
+            )}&url=${encodeURIComponent(url)}`,
+            "_blank"
+          );
+          break;
+        case "facebook":
+          window.open(
+            `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+              url
+            )}`,
+            "_blank"
+          );
+          break;
+        case "copy":
+          navigator.clipboard.writeText(url);
+          alert("Link copied to clipboard!");
+          break;
+        default:
+          break;
       }
+      setShowShareMenu(false);
+    },
+    [job]
+  );
 
-      const { data, error } = await supabase
-        .from("job_comments")
-        .insert([{
-          job_id: id,
-          user_id: user.id,
-          content: newComment,
-          rating: 5,
-        }])
-        .select(`
-          *,
-          profiles:user_id (
-            name,
-            avatar_url
-          )
-        `)
-        .single();
-
-      if (!error) {
-        setComments(prev => [data, ...prev]);
-        setNewComment("");
-      }
-    } catch (error) {
-      console.error("Error adding comment:", error);
-      alert("Failed to add comment");
-    } finally {
-      setCommentLoading(false);
-    }
-  }, [id, newComment, supabase]);
 
   const handleLikeComment = useCallback((commentId) => {
     // Implement like functionality
@@ -618,12 +658,80 @@ const InternshipJobDescription = () => {
   const ApplicationModal = useMemo(() => {
     if (!showApplicationModal) return null;
 
+  const handleAddComment = async (e) => {
+  e.preventDefault();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    alert('Please sign in to post a review');
+    return;
+  }
+  
+  if (!newComment.trim()) {
+    alert('Please write a review before posting');
+    return;
+  }
+
+  setCommentLoading(true);
+
+  try {
+    // Insert without expecting the profile relationship
+    const { data, error } = await supabase
+      .from('job_reviews')
+      .insert([
+        {
+          job_id: id,
+          user_id: user.id,
+          content: newComment.trim(),
+          rating: 5
+        }
+      ])
+      .select() // Just select the comment data, no profile relationship
+      .single();
+
+    if (error) throw error;
+
+    // Get user profile separately
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('name, avatar_url')
+      .eq('id', user.id)
+      .single();
+
+    // Create the complete comment object manually
+    const newCommentWithProfile = {
+      ...data,
+      profiles: profileData || { 
+        name: user.user_metadata?.name || user.email?.split('@')[0] || 'Anonymous',
+        avatar_url: user.user_metadata?.avatar_url || null
+      }
+    };
+
+    // Add to comments list
+    setComments([newCommentWithProfile, ...comments]);
+    setNewComment('');
+    
+    alert('Review posted successfully!');
+  } catch (error) {
+    console.error('Error posting review:', error);
+    alert('Failed to post review: ' + error.message);
+  } finally {
+    setCommentLoading(false);
+  }
+};
+
+    // Also add this handler for the textarea
+    const handleNewCommentChange = (e) => {
+      setNewComment(e.target.value);
+    };
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           <div className="p-8">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">Apply for {job?.title}</h3>
+              <h3 className="text-2xl font-bold text-gray-900">
+                Apply for {job?.title}
+              </h3>
               <button
                 onClick={() => setShowApplicationModal(false)}
                 className="text-gray-400 hover:text-gray-600"
@@ -643,7 +751,7 @@ const InternshipJobDescription = () => {
                     <input
                       type="text"
                       value={applicationForm.full_name}
-                      onChange={handleInputChange('full_name')}
+                      onChange={handleInputChange("full_name")}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
                       placeholder="John Doe"
                       required
@@ -657,7 +765,7 @@ const InternshipJobDescription = () => {
                     <input
                       type="email"
                       value={applicationForm.email}
-                      onChange={handleInputChange('email')}
+                      onChange={handleInputChange("email")}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
                       placeholder="john@example.com"
                       required
@@ -673,7 +781,7 @@ const InternshipJobDescription = () => {
                   <input
                     type="tel"
                     value={applicationForm.phone}
-                    onChange={handleInputChange('phone')}
+                    onChange={handleInputChange("phone")}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
                     placeholder="+1234567890"
                     disabled={uploadingResume}
@@ -689,13 +797,19 @@ const InternshipJobDescription = () => {
                       <div className="flex items-center space-x-3">
                         <FaFilePdf className="w-8 h-8 text-red-500" />
                         <div>
-                          <p className="font-medium text-gray-900">Resume uploaded</p>
+                          <p className="font-medium text-gray-900">
+                            Resume uploaded
+                          </p>
                           <p className="text-sm text-gray-500">Click to view</p>
                         </div>
                       </div>
                       <button
                         type="button"
-                        onClick={() => handleInputChange('resume_url')({ target: { value: "" } })}
+                        onClick={() =>
+                          handleInputChange("resume_url")({
+                            target: { value: "" },
+                          })
+                        }
                         className="text-red-600 hover:text-red-800"
                         disabled={uploadingResume}
                       >
@@ -705,7 +819,9 @@ const InternshipJobDescription = () => {
                   ) : (
                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
                       <FaUpload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600 mb-2">Upload your resume (PDF or Word)</p>
+                      <p className="text-gray-600 mb-2">
+                        Upload your resume (PDF or Word)
+                      </p>
                       <input
                         type="file"
                         id="resume-upload"
@@ -719,12 +835,20 @@ const InternshipJobDescription = () => {
                       />
                       <label
                         htmlFor="resume-upload"
-                        className={`inline-flex items-center space-x-2 px-6 py-3 ${uploadingResume ? 'bg-gray-300 cursor-not-allowed' : 'bg-gray-100 hover:bg-gray-200 cursor-pointer'} text-gray-700 rounded-lg transition-colors`}
+                        className={`inline-flex items-center space-x-2 px-6 py-3 ${
+                          uploadingResume
+                            ? "bg-gray-300 cursor-not-allowed"
+                            : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
+                        } text-gray-700 rounded-lg transition-colors`}
                       >
                         <FaUpload className="w-5 h-5" />
-                        <span>{uploadingResume ? 'Uploading...' : 'Choose File'}</span>
+                        <span>
+                          {uploadingResume ? "Uploading..." : "Choose File"}
+                        </span>
                       </label>
-                      <p className="text-xs text-gray-500 mt-2">Max file size: 5MB</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Max file size: 5MB
+                      </p>
                     </div>
                   )}
                   {uploadingResume && (
@@ -743,7 +867,7 @@ const InternshipJobDescription = () => {
                   </label>
                   <textarea
                     value={applicationForm.cover_letter}
-                    onChange={handleInputChange('cover_letter')}
+                    onChange={handleInputChange("cover_letter")}
                     rows="6"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent resize-none"
                     placeholder="Tell us why you're a great fit for this position..."
@@ -775,7 +899,15 @@ const InternshipJobDescription = () => {
         </div>
       </div>
     );
-  }, [showApplicationModal, job, applicationForm, uploadingResume, handleSubmitApplication, handleInputChange, handleUploadResume]);
+  }, [
+    showApplicationModal,
+    job,
+    applicationForm,
+    uploadingResume,
+    handleSubmitApplication,
+    handleInputChange,
+    handleUploadResume,
+  ]);
 
   if (loading) {
     return (
@@ -913,7 +1045,7 @@ const InternshipJobDescription = () => {
                       </button>
                       <div className="relative">
                         <button
-                          onClick={() => setShowShareMenu(prev => !prev)}
+                          onClick={() => setShowShareMenu((prev) => !prev)}
                           className="flex items-center space-x-1 hover:text-green-900 transition-colors"
                           aria-label="Share job"
                         >
@@ -959,7 +1091,7 @@ const InternshipJobDescription = () => {
               <div className="flex items-center space-x-6 py-4 border-y border-gray-200">
                 <div>
                   <span className="text-2xl font-bold text-gray-900">
-                   GHS {job.salary_range || "Competitive Salary"}
+                    GHS {job.salary_range || "Competitive Salary"}
                   </span>
                   <p className="text-sm text-gray-600">Monthly compensation</p>
                 </div>
@@ -1021,9 +1153,14 @@ const InternshipJobDescription = () => {
                       <h4 className="text-lg font-semibold text-gray-900 mb-2">
                         Application Submitted ✓
                       </h4>
-                      <ApplicationStatusBadge userApplication={userApplication} />
+                      <ApplicationStatusBadge
+                        userApplication={userApplication}
+                      />
                       <p className="text-sm text-gray-600">
-                        Applied on: {new Date(userApplication.created_at).toLocaleDateString()}
+                        Applied on:{" "}
+                        {new Date(
+                          userApplication.created_at
+                        ).toLocaleDateString()}
                       </p>
                     </div>
                     <button
@@ -1045,7 +1182,8 @@ const InternshipJobDescription = () => {
                         Ready to advance your career?
                       </h3>
                       <p className="text-gray-600">
-                        Join {job.company} and take the next step in your professional journey
+                        Join {job.company} and take the next step in your
+                        professional journey
                       </p>
                     </div>
                     <button
@@ -1086,7 +1224,7 @@ const InternshipJobDescription = () => {
             <div className="mb-8">
               <div className="md:hidden flex overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4">
                 <div className="flex space-x-2 min-w-min">
-                  {["description", "requirements", "benefits", "reviews"].map(
+                  {["description", "requirements", "benefits", ].map(
                     (tab) => (
                       <button
                         key={`tab-${tab}`}
@@ -1103,9 +1241,9 @@ const InternshipJobDescription = () => {
                   )}
                 </div>
               </div>
-              
+
               <div className="hidden md:flex space-x-1 bg-gray-100 rounded-2xl p-1">
-                {["description", "requirements", "benefits", "reviews"].map(
+                {["description", "requirements", "benefits", ""].map(
                   (tab) => (
                     <button
                       key={`tab-${tab}`}
@@ -1130,9 +1268,12 @@ const InternshipJobDescription = () => {
                     Position Overview
                   </h3>
                   <div className="text-gray-700 leading-relaxed space-y-4">
-                    {job.description && job.description.split("\n").map((paragraph, index) => (
-                      <p key={index}>{paragraph}</p>
-                    ))}
+                    {job.description &&
+                      job.description
+                        .split("\n")
+                        .map((paragraph, index) => (
+                          <p key={index}>{paragraph}</p>
+                        ))}
                   </div>
                 </div>
               )}
@@ -1143,17 +1284,18 @@ const InternshipJobDescription = () => {
                     Qualifications & Requirements
                   </h3>
                   <div className="space-y-4">
-                    {job.requirements && job.requirements.split("\n").map((requirement, index) => (
-                      <div
-                        key={index}
-                        className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl"
-                      >
-                        <FaCheckCircle className="w-6 h-6 text-green-900 mt-1 flex-shrink-0" />
-                        <span className="text-gray-700 text-lg">
-                          {requirement}
-                        </span>
-                      </div>
-                    ))}
+                    {job.requirements &&
+                      job.requirements.split("\n").map((requirement, index) => (
+                        <div
+                          key={index}
+                          className="flex items-start space-x-4 p-4 bg-gray-50 rounded-xl"
+                        >
+                          <FaCheckCircle className="w-6 h-6 text-green-900 mt-1 flex-shrink-0" />
+                          <span className="text-gray-700 text-lg">
+                            {requirement}
+                          </span>
+                        </div>
+                      ))}
                   </div>
                 </div>
               )}
@@ -1183,104 +1325,7 @@ const InternshipJobDescription = () => {
                 </div>
               )}
 
-              {activeTab === "reviews" && (
-                <div className="space-y-6">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-6">
-                    Candidate Reviews
-                  </h3>
-
-                  <form
-                    onSubmit={handleAddComment}
-                    className="bg-gray-50 rounded-2xl p-6 mb-8"
-                  >
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                      Share Your Experience
-                    </h4>
-                    <div className="space-y-4">
-                      <textarea
-                        value={newComment}
-                        onChange={handleNewCommentChange}
-                        placeholder="Share your thoughts about this opportunity..."
-                        className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-900 focus:border-transparent resize-none"
-                        rows="4"
-                        disabled={commentLoading}
-                      />
-                      <button
-                        type="submit"
-                        disabled={commentLoading || !newComment.trim()}
-                        className="bg-gradient-to-r from-green-900 to-green-800 hover:from-green-800 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-500 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-105 disabled:hover:scale-100 flex items-center space-x-2"
-                      >
-                        <FaPaperPlane className="w-4 h-4" />
-                        <span>
-                          {commentLoading ? "Posting..." : "Post Review"}
-                        </span>
-                      </button>
-                    </div>
-                  </form>
-
-                  <div className="space-y-6">
-                    {comments.length === 0 ? (
-                      <div className="text-center py-12">
-                        <FaComment className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-600">
-                          No reviews yet. Be the first to share your experience!
-                        </p>
-                      </div>
-                    ) : (
-                      comments.map((comment) => (
-                        <div
-                          key={comment.id}
-                          className="bg-white border border-gray-200 rounded-2xl p-6"
-                        >
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center space-x-3">
-                              {comment.profiles?.avatar_url ? (
-                                <img
-                                  src={comment.profiles.avatar_url}
-                                  alt={comment.profiles.name}
-                                  className="w-12 h-12 rounded-full object-cover"
-                                />
-                              ) : (
-                                <FaUserCircle className="w-12 h-12 text-gray-400" />
-                              )}
-                              <div>
-                                <h5 className="font-semibold text-gray-900">
-                                  {comment.profiles?.name || "Anonymous"}
-                                </h5>
-                                <div className="flex items-center space-x-2">
-                                  <div className="flex">
-                                    {[1, 2, 3, 4, 5].map((star) => (
-                                      <FaStar
-                                        key={star}
-                                        className="w-4 h-4 text-yellow-400"
-                                      />
-                                    ))}
-                                  </div>
-                                  <span className="text-sm text-gray-500">
-                                    {new Date(
-                                      comment.created_at
-                                    ).toLocaleDateString()}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => handleLikeComment(comment.id)}
-                              className="flex items-center space-x-1 text-gray-400 hover:text-green-900 transition-colors"
-                            >
-                              <FaRegThumbsUp className="w-4 h-4" />
-                              <span className="text-sm">12</span>
-                            </button>
-                          </div>
-                          <p className="text-gray-700 leading-relaxed">
-                            {comment.content}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
+            
             </div>
 
             {userHasApplied && (
@@ -1290,7 +1335,7 @@ const InternshipJobDescription = () => {
                 newMessage={newMessage}
                 sendingMessage={sendingMessage}
                 currentUserId={currentUserId}
-                onToggleMessages={() => setShowMessages(prev => !prev)}
+                onToggleMessages={() => setShowMessages((prev) => !prev)}
                 onSendMessage={sendMessageToAdmin}
                 onNewMessageChange={handleNewMessageChange}
               />
@@ -1345,10 +1390,11 @@ const InternshipJobDescription = () => {
                 Need Help with Your Application?
               </h3>
               <p className="text-gray-600 mb-4">
-                Our career advisors are here to help you prepare the perfect application.
+                Our career advisors are here to help you prepare the perfect
+                application.
               </p>
               <button
-                onClick={() => navigate("/career-support")}
+                onClick={() => navigate("/contact")}
                 className="w-full bg-white border border-blue-300 text-blue-900 hover:bg-blue-50 py-3 rounded-xl font-medium transition-colors"
               >
                 Get Career Support

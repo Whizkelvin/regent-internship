@@ -29,6 +29,7 @@ import {
 const MyApplications = () => {
   const navigate = useNavigate();
   const [applications, setApplications] = useState([]);
+   const [exporting, setExporting] = useState(false);
   const [filteredApplications, setFilteredApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -301,7 +302,7 @@ const MyApplications = () => {
               </button>
               {application.cover_letter && (
                 <button className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors">
-                  View Cover Letter
+           
                 </button>
               )}
             </div>
@@ -390,6 +391,54 @@ const MyApplications = () => {
       </div>
     </div>
   );
+
+  const exportToCSV = () => {
+  setExporting(true);
+  
+  try {
+    // Prepare data for export
+    const exportData = filteredApplications.map(app => ({
+      'Job Title': app.jobs?.title || 'N/A',
+      'Company': app.jobs?.company || 'N/A',
+      'Location': app.jobs?.location || 'N/A',
+      'Salary': app.jobs?.salary || 'N/A',
+      'Status': app.status.charAt(0).toUpperCase() + app.status.slice(1),
+      'Applied Date': formatDate(app.created_at),
+      'Last Updated': formatDate(app.updated_at || app.created_at),
+      'Cover Letter': app.cover_letter || 'N/A'
+    }));
+
+    // Create CSV content
+    const headers = Object.keys(exportData[0] || {});
+    const csvContent = [
+      headers.join(','),
+      ...exportData.map(row => 
+        headers.map(header => 
+          `"${String(row[header] || '').replace(/"/g, '""')}"`
+        ).join(',')
+      )
+    ].join('\n');
+
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `applications_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+  } catch (error) {
+    console.error('Export failed:', error);
+    alert('Failed to export applications. Please try again.');
+  } finally {
+    setExporting(false);
+  }
+};
 
   if (loading) {
     return (
@@ -571,18 +620,41 @@ const MyApplications = () => {
         </div>
 
         {/* Export Section */}
-        <div className="mt-8 bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">Export Applications</h3>
-              <p className="text-gray-600 mt-1">Download your application history as a CSV file</p>
-            </div>
-            <button className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50">
-              <FaDownload className="w-4 h-4 mr-2" />
-              Export CSV
-            </button>
-          </div>
-        </div>
+       <div className="mt-8 bg-white rounded-lg border border-gray-200 p-6">
+  <div className="flex items-center justify-between">
+    <div>
+      <h3 className="text-lg font-medium text-gray-900">Export Applications</h3>
+      <p className="text-gray-600 mt-1">Download your application history as a CSV file</p>
+    </div>
+    <button 
+      onClick={exportToCSV}
+      disabled={exporting || filteredApplications.length === 0}
+      className={`inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg ${
+        exporting || filteredApplications.length === 0
+          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+          : 'text-gray-700 bg-white hover:bg-gray-50'
+      }`}
+    >
+      {exporting ? (
+        <>
+          <div className="w-4 h-4 mr-2 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+          Exporting...
+        </>
+      ) : (
+        <>
+          <FaDownload className="w-4 h-4 mr-2" />
+          Export CSV ({filteredApplications.length})
+        </>
+      )}
+    </button>
+  </div>
+  
+  {filteredApplications.length === 0 && (
+    <p className="text-sm text-gray-500 mt-3">
+      No applications available for export. Apply to some jobs first!
+    </p>
+  )}
+</div>
       </div>
     </div>
   );

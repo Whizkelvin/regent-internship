@@ -128,7 +128,8 @@ const Home = () => {
                   Strategic career development platform for tomorrow's industry leaders and innovators.
                 </p>
                 <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-6">
-                  <button className="bg-gradient-to-r from-green-950 to-green-800 hover:from-green-800 hover:to-green-700 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-2xl flex items-center space-x-3">
+                  <button className="bg-gradient-to-r from-green-950 to-green-800 hover:from-green-800 hover:to-green-700 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-2xl flex items-center space-x-3"
+                  onClick={()=>navigate("/jobs")}>
                     <BiBriefcase className="w-6 h-6" />
                     <span>Explore Executive Opportunities</span>
                   </button>
@@ -157,7 +158,8 @@ const Home = () => {
                   Connect with cutting-edge technology firms and drive innovation in the digital economy.
                 </p>
                 <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-6">
-                  <button className="bg-gradient-to-r from-blue-900 to-purple-900 hover:from-blue-800 hover:to-purple-800 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-2xl flex items-center space-x-3">
+                  <button className="bg-gradient-to-r from-blue-900 to-purple-900 hover:from-blue-800 hover:to-purple-800 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-2xl flex items-center space-x-3"
+                  onClick={()=>navigate("/jobs")}>
                     <FaLaptopCode className="w-6 h-6" />
                     <span>Tech Opportunities</span>
                   </button>
@@ -305,13 +307,13 @@ const Home = () => {
               </button>
             </div>
             
-            <div className="flex flex-wrap gap-4 mt-6 justify-center">
+            {/* <div className="flex flex-wrap gap-4 mt-6 justify-center">
               {["Executive Leadership", "Technology Management", "Research & Development", "Strategic Consulting", "Data Analytics", "Financial Services"].map((tag) => (
                 <span key={tag} className="px-4 py-2 bg-white/10 rounded-full text-sm text-green-200 border border-green-300/30">
                   {tag}
                 </span>
               ))}
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

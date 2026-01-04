@@ -139,7 +139,7 @@ const Header = () => {
         <div className="flex items-center space-x-3">
           <div className="relative">
             <img
-              src={profilePic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&h=100&q=80"}
+              src={profilePic || "https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_Placeholder.png"}
               alt="Profile"
               className="w-10 h-10 rounded-full object-cover border-2 border-green-300 shadow-lg"
             />
