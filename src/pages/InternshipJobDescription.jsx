@@ -87,7 +87,7 @@ const MessagesSection = ({
   }, [applicationMessages, showMessages]);
 
   return (
-    <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-6 mt-8">
+    <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-6 mt-8 overflow-hidden">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-xl font-bold text-gray-900">Application Messages</h3>
         <button
@@ -1027,7 +1027,7 @@ const InternshipJobDescription = () => {
                       </p>
                     </div>
                     <button
-                      onClick={() => setShowMessages(true)}
+                      onClick={() => navigate("/message")}
                       className="text-green-900 hover:text-green-800 font-medium flex items-center space-x-2"
                     >
                       <FaEnvelope className="w-5 h-5" />

@@ -695,7 +695,7 @@ const handleSendMessage = async (e) => {
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         <button
-                                            onClick={() => navigate(`/applications`)}
+                                            onClick={() => navigate(`/whistlist`)}
                                             className="text-green-900 hover:text-green-800 font-medium text-sm"
                                         >
                                             View Application
