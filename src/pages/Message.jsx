@@ -523,16 +523,11 @@ const handleSendMessage = async (e) => {
                         <IoMdArrowBack className="text-xl" />
                     </button>
                     <div>
-                        <p className="text-white font-semibold text-lg">Messages</p>
+                        <p className="text-white font-semibold text-lg">Notification</p>
                         <p className="text-green-200 text-xs">Stay connected</p>
                     </div>
                 </div>
-                <button 
-                    onClick={() => setShowNewMessageModal(true)}
-                    className="text-white p-2 rounded-lg hover:bg-white/10 transition-all duration-300"
-                >
-                    <FaEdit className="text-xl" />
-                </button>
+               
             </div>
 
             {/* Desktop Header */}
@@ -547,7 +542,7 @@ const handleSendMessage = async (e) => {
                         <p className="text-2xl font-bold text-gray-900">
                             Regent <span className="text-green-950">Hub</span>
                         </p>
-                        <p className="text-gray-600 text-sm">Application Messages</p>
+                        <p className="text-gray-600 text-sm">Notification  Messages</p>
                     </div>
                 </div>
                 <div className="flex items-center space-x-4">
@@ -712,17 +707,19 @@ const handleSendMessage = async (e) => {
                             {/* Messages */}
                             <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
                                 {messages.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-full text-center">
-                                        <FaPaperPlane className="w-16 h-16 text-gray-300 mb-4" />
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No messages yet</h3>
+                                    <div className="flex flex-col items-center justify-center h-full  text-center">
+                                       
                                         <p className="text-gray-600 max-w-md">
-                                            Start the conversation about {activeChat.job?.title} application.
+                                            Know more about your {activeChat.job?.title} application.
                                         </p>
-                                        <p className="text-gray-500 text-sm mt-2">
-                                            Current application status: <span className={`font-medium ${getStatusColor(activeChat.status)} px-2 py-1 rounded`}>
-                                                {activeChat.status}
-                                            </span>
+                                        <p className="text-gray-600 max-w-md">
+                                             {activeChat.job?.description} 
                                         </p>
+
+                                        <img
+                                        className="text-gray-600 max-w-md w-83 h-64 mt-4 rounded-lg shadow-md lg:w-96 lg:h-92"
+                                        src={activeChat.job?.job_image} />
+                                       
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
@@ -770,25 +767,7 @@ const handleSendMessage = async (e) => {
                             {/* Message Input */}
                             <div className="p-4 border-t border-gray-200 bg-white">
                                 <form onSubmit={handleSendMessage} className="flex items-center space-x-3">
-                                    <input
-                                        type="text"
-                                        value={message}
-                                        onChange={(e) => setMessage(e.target.value)}
-                                        placeholder="Type your message..."
-                                        className="flex-1 px-4 py-3 bg-gray-100 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-green-900 focus:border-transparent"
-                                        disabled={sendingMessage}
-                                    />
-                                    <button
-                                        type="submit"
-                                        disabled={!message.trim() || sendingMessage}
-                                        className="bg-gradient-to-r from-green-900 to-green-800 hover:from-green-800 hover:to-green-700 text-white p-3 rounded-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center min-w-[44px] min-h-[44px]"
-                                    >
-                                        {sendingMessage ? (
-                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        ) : (
-                                            <FaPaperPlane className="w-5 h-5" />
-                                        )}
-                                    </button>
+                  
                                 </form>
                                 <div className="mt-2 text-xs text-gray-500 text-center">
                                     Application status: <span className={`font-medium ${getStatusColor(activeChat.status)} px-2 py-1 rounded`}>
@@ -803,7 +782,7 @@ const handleSendMessage = async (e) => {
                             <div className="w-24 h-24 bg-gradient-to-r from-green-100 to-green-50 rounded-full flex items-center justify-center mb-6">
                                 <FaPaperPlane className="w-12 h-12 text-green-900" />
                             </div>
-                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Application Messages</h3>
+                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Notification Messages</h3>
                             <p className="text-gray-600 mb-6 max-w-md">
                                 {user?.user_metadata?.role === 'applicant'
                                     ? 'Communicate with employers about your job applications. Message them for updates, questions, or follow-ups.'

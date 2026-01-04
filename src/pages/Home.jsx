@@ -215,8 +215,7 @@ const Home = () => {
               </div>
             </div>
             <p className="text-xl md:text-2xl text-gray-600 max-w-4xl mx-auto leading-relaxed">
-              The definitive career acceleration platform for exceptional talent. We cultivate strategic partnerships 
-              between premier academic institutions and industry leaders to drive professional excellence and innovation.
+             The definitive career acceleration platform for exceptional talent, built to identify, nurture, and elevate the next generation of industry leaders. We cultivate long-term, strategic partnerships between premier academic institutions and influential industry organizations, bridging the gap between education and real-world impact. By combining academic excellence, industry insight, mentorship, and innovation-driven opportunities, we empower individuals to achieve career distinction while enabling organizations to access future-ready talent that drives sustainable growth and innovation.
             </p>
           </div>
 
@@ -445,8 +444,8 @@ const Home = () => {
             <div>
               <h4 className="font-semibold mb-4 text-green-400">Contact Leadership</h4>
               <ul className="space-y-2 text-sm text-gray-400">
-                <li>careers@regent.edu.gh</li>
-                <li>+233 24 123 4567</li>
+                <li>regenthub@regent.edu.gh</li>
+                <li>+233 50 132 1208 / 54 574 7320</li>
                 <li>Accra, Ghana</li>
               </ul>
             </div>
@@ -454,7 +453,7 @@ const Home = () => {
           
           <div className="border-t border-gray-800 mt-12 pt-8 text-center">
             <p className="text-gray-500 text-sm">
-              © 2024 Regent University Career Development Platform. All rights reserved. | Executive Leadership in Education & Innovation
+              © 2026 Regent University Career Development Platform. All rights reserved. | Executive Leadership in Education & Innovation
             </p>
           </div>
         </div>

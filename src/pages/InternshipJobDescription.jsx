@@ -959,7 +959,7 @@ const InternshipJobDescription = () => {
               <div className="flex items-center space-x-6 py-4 border-y border-gray-200">
                 <div>
                   <span className="text-2xl font-bold text-gray-900">
-                    {job.salary_range || "Competitive Salary"}
+                   GHS {job.salary_range || "Competitive Salary"}
                   </span>
                   <p className="text-sm text-gray-600">Monthly compensation</p>
                 </div>
