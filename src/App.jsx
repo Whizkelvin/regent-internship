@@ -12,7 +12,7 @@ import About from "./pages/About";
 import Profile from "./pages/Profile";
 import Message from "./pages/Message";
 import InternshipJobDescription from "./pages/InternshipJobDescription";
-import AdminJobs from "./adminPage/adminPanel";
+import AdminJobs from "./pages/AdminJobs";
 import MyApplications from "./pages/MyApplication";
 
 const App = () => {
