@@ -99,11 +99,30 @@ const MessagesSection = ({
     }
   }, [applicationMessages, showMessages]);
 
+  // Check if currentUserId is properly passed
+  if (!currentUserId) {
+    return (
+      <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-6 mt-8">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold text-gray-900">Application Messages</h3>
+          <button onClick={onToggleMessages} className="text-green-900 hover:text-green-800">
+            {showMessages ? <FaChevronUp /> : <FaChevronDown />}
+          </button>
+        </div>
+        {showMessages && (
+          <div className="text-center py-8">
+            <p className="text-gray-600">Please sign in to view messages.</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-6 mt-8 overflow-hidden">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-xl font-bold text-gray-900">
-          Application Messages
+          Application Messages ({applicationMessages.length})
         </h3>
         <button
           onClick={onToggleMessages}
@@ -119,41 +138,46 @@ const MessagesSection = ({
             {applicationMessages.length === 0 ? (
               <div className="text-center py-8">
                 <FaComment className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-600">No messages yet.</p>
+                <p className="text-gray-600">No messages yet. Start a conversation!</p>
               </div>
             ) : (
-              applicationMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    message.sender_id === currentUserId
-                      ? "justify-end"
-                      : "justify-start"
-                  }`}
-                >
+              applicationMessages.map((message) => {
+                const isCurrentUser = message.sender_id === currentUserId;
+                const senderName = message.sender?.full_name || 
+                                  message.sender?.email?.split('@')[0] || 
+                                  (isCurrentUser ? 'You' : 'Admin');
+                
+                return (
                   <div
-                    className={`max-w-xs md:max-w-md rounded-2xl p-4 ${
-                      message.sender_id === currentUserId
-                        ? "bg-green-100"
-                        : "bg-gray-100"
+                    key={message.id}
+                    className={`flex ${
+                      isCurrentUser ? "justify-end" : "justify-start"
                     }`}
                   >
-                    <div className="flex items-center space-x-2 mb-2">
-                      <FaUserCircle className="w-4 h-4 text-gray-500" />
-                      <span className="text-sm font-medium">
-                        {message.sender?.full_name || "Admin"}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(message.created_at).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
+                    <div
+                      className={`max-w-xs md:max-w-md rounded-2xl p-4 ${
+                        isCurrentUser
+                          ? "bg-green-100 border border-green-200"
+                          : "bg-gray-100 border border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2 mb-2">
+                        <FaUserCircle className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm font-medium">{senderName}</span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(message.created_at).toLocaleString([], {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-gray-800">{message.message}</p>
                     </div>
-                    <p className="text-gray-800">{message.message}</p>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -201,6 +225,7 @@ const InternshipJobDescription = () => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [commentLoading, setCommentLoading] = useState(false);
+  const [rating, setRating] = useState(5);
 
   // Application states
   const [showApplicationModal, setShowApplicationModal] = useState(false);
@@ -255,7 +280,7 @@ const InternshipJobDescription = () => {
           .select("*")
           .eq("job_id", id)
           .eq("user_id", user.id)
-          .maybeSingle(); // Use maybeSingle instead of single
+          .maybeSingle();
 
         if (data) {
           setUserHasApplied(true);
@@ -283,7 +308,7 @@ const InternshipJobDescription = () => {
           .from("jobs")
           .select("*")
           .eq("id", id)
-          .maybeSingle(); // Use maybeSingle to handle no results
+          .maybeSingle();
 
         if (error) throw error;
         if (!data) {
@@ -352,19 +377,24 @@ const InternshipJobDescription = () => {
     try {
       const { data, error } = await supabase
         .from("application_messages")
-        .select(
-          `
+        .select(`
           *,
-          sender:profiles!sender_id (full_name, avatar_url),
-          receiver:profiles!receiver_id (full_name, avatar_url)
-        `
-        )
+          sender:sender_id (id, full_name, email),
+          receiver:receiver_id (id, full_name, email)
+        `)
         .eq("application_id", applicationId)
         .order("created_at", { ascending: true });
 
-      if (!error) setApplicationMessages(data || []);
+      if (!error) {
+        console.log("Fetched messages:", data);
+        setApplicationMessages(data || []);
+      } else {
+        console.error("Error fetching messages:", error);
+        setApplicationMessages([]);
+      }
     } catch (error) {
       console.error("Error fetching messages:", error);
+      setApplicationMessages([]);
     }
   }, []);
 
@@ -385,6 +415,10 @@ const InternshipJobDescription = () => {
 
   const handleNewCommentChange = useCallback((e) => {
     setNewComment(e.target.value);
+  }, []);
+
+  const handleRatingChange = useCallback((newRating) => {
+    setRating(newRating);
   }, []);
 
   const handleUploadResume = useCallback(async (file) => {
@@ -535,7 +569,7 @@ const InternshipJobDescription = () => {
         alert("Error submitting application: " + error.message);
       }
     },
-    [id, applicationForm, supabase]
+    [id, applicationForm]
   );
 
   const sendMessageToAdmin = useCallback(
@@ -549,25 +583,40 @@ const InternshipJobDescription = () => {
           data: { user },
         } = await supabase.auth.getUser();
 
-        const { error } = await supabase.from("application_messages").insert([
-          {
-            application_id: userApplication.id,
-            sender_id: user.id,
-            receiver_id: null,
-            message: newMessage,
-            is_read: false,
-            created_at: new Date().toISOString(),
-          },
-        ]);
+        console.log('Sending message with:', {
+          application_id: userApplication.id,
+          sender_id: user.id,
+          message: newMessage
+        });
+
+        // Fix: Make sure to include all required fields
+        const { data, error } = await supabase
+          .from("application_messages")
+          .insert([
+            {
+              application_id: userApplication.id,
+              sender_id: user.id,
+              message: newMessage,
+              is_read: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ])
+          .select()
+          .single();
 
         if (error) throw error;
 
+        console.log('Message sent successfully:', data);
+
+        // Refresh messages
+        await fetchApplicationMessages(userApplication.id);
+        
         setNewMessage("");
-        fetchApplicationMessages(userApplication.id);
         alert("Message sent to admin!");
       } catch (error) {
         console.error("Error sending message:", error);
-        alert("Error sending message");
+        alert("Error sending message: " + error.message);
       } finally {
         setSendingMessage(false);
       }
@@ -625,10 +674,73 @@ const InternshipJobDescription = () => {
     [job]
   );
 
-
   const handleLikeComment = useCallback((commentId) => {
     // Implement like functionality
+    console.log("Liked comment:", commentId);
   }, []);
+
+  const handleAddComment = useCallback(async (e) => {
+    e.preventDefault();
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert('Please sign in to post a review');
+      return;
+    }
+    
+    if (!newComment.trim()) {
+      alert('Please write a review before posting');
+      return;
+    }
+
+    setCommentLoading(true);
+
+    try {
+      // Insert without expecting the profile relationship
+      const { data, error } = await supabase
+        .from('job_reviews')
+        .insert([
+          {
+            job_id: id,
+            user_id: user.id,
+            content: newComment.trim(),
+            rating: rating
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Get user profile separately
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('name, avatar_url')
+        .eq('id', user.id)
+        .single();
+
+      // Create the complete comment object manually
+      const newCommentWithProfile = {
+        ...data,
+        profiles: profileData || { 
+          name: user.user_metadata?.name || user.email?.split('@')[0] || 'Anonymous',
+          avatar_url: user.user_metadata?.avatar_url || null
+        }
+      };
+
+      // Add to comments list
+      setComments([newCommentWithProfile, ...comments]);
+      setNewComment('');
+      setRating(5);
+      
+      alert('Review posted successfully!');
+    } catch (error) {
+      console.error('Error posting review:', error);
+      alert('Failed to post review: ' + error.message);
+    } finally {
+      setCommentLoading(false);
+    }
+  }, [id, newComment, rating, comments]);
 
   const getJobTypeColor = useCallback((jobType) => {
     switch (jobType) {
@@ -658,72 +770,6 @@ const InternshipJobDescription = () => {
   const ApplicationModal = useMemo(() => {
     if (!showApplicationModal) return null;
 
-  const handleAddComment = async (e) => {
-  e.preventDefault();
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    alert('Please sign in to post a review');
-    return;
-  }
-  
-  if (!newComment.trim()) {
-    alert('Please write a review before posting');
-    return;
-  }
-
-  setCommentLoading(true);
-
-  try {
-    // Insert without expecting the profile relationship
-    const { data, error } = await supabase
-      .from('job_reviews')
-      .insert([
-        {
-          job_id: id,
-          user_id: user.id,
-          content: newComment.trim(),
-          rating: 5
-        }
-      ])
-      .select() // Just select the comment data, no profile relationship
-      .single();
-
-    if (error) throw error;
-
-    // Get user profile separately
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('name, avatar_url')
-      .eq('id', user.id)
-      .single();
-
-    // Create the complete comment object manually
-    const newCommentWithProfile = {
-      ...data,
-      profiles: profileData || { 
-        name: user.user_metadata?.name || user.email?.split('@')[0] || 'Anonymous',
-        avatar_url: user.user_metadata?.avatar_url || null
-      }
-    };
-
-    // Add to comments list
-    setComments([newCommentWithProfile, ...comments]);
-    setNewComment('');
-    
-    alert('Review posted successfully!');
-  } catch (error) {
-    console.error('Error posting review:', error);
-    alert('Failed to post review: ' + error.message);
-  } finally {
-    setCommentLoading(false);
-  }
-};
-
-    // Also add this handler for the textarea
-    const handleNewCommentChange = (e) => {
-      setNewComment(e.target.value);
-    };
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -1224,7 +1270,7 @@ const InternshipJobDescription = () => {
             <div className="mb-8">
               <div className="md:hidden flex overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4">
                 <div className="flex space-x-2 min-w-min">
-                  {["description", "requirements", "benefits", ].map(
+                  {["description", "requirements", "benefits", "reviews"].map(
                     (tab) => (
                       <button
                         key={`tab-${tab}`}
@@ -1243,7 +1289,7 @@ const InternshipJobDescription = () => {
               </div>
 
               <div className="hidden md:flex space-x-1 bg-gray-100 rounded-2xl p-1">
-                {["description", "requirements", "benefits", ""].map(
+                {["description", "requirements", "benefits", "reviews"].map(
                   (tab) => (
                     <button
                       key={`tab-${tab}`}
@@ -1325,7 +1371,115 @@ const InternshipJobDescription = () => {
                 </div>
               )}
 
-            
+              {activeTab === "reviews" && (
+                <div className="prose prose-lg max-w-none">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-6">
+                    Reviews & Feedback
+                  </h3>
+                  
+                  {/* Add Review Form */}
+                  <div className="bg-gray-50 rounded-xl p-6 mb-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                      Share Your Experience
+                    </h4>
+                    <form onSubmit={handleAddComment} className="space-y-4">
+                      <div className="flex items-center space-x-2 mb-4">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => handleRatingChange(star)}
+                            className={`text-2xl ${
+                              star <= rating ? "text-yellow-400" : "text-gray-300"
+                            } hover:text-yellow-500 transition-colors`}
+                          >
+                            <FaStar />
+                          </button>
+                        ))}
+                        <span className="text-sm text-gray-600 ml-2">
+                          {rating} out of 5
+                        </span>
+                      </div>
+                      <textarea
+                        value={newComment}
+                        onChange={handleNewCommentChange}
+                        rows="4"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent resize-none"
+                        placeholder="Share your thoughts about this opportunity..."
+                        disabled={commentLoading}
+                      />
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={!newComment.trim() || commentLoading}
+                          className="px-6 py-3 bg-green-900 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-400 font-medium transition-colors flex items-center space-x-2"
+                        >
+                          <FaComment className="w-5 h-5" />
+                          <span>{commentLoading ? "Posting..." : "Post Review"}</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Reviews List */}
+                  <div className="space-y-6">
+                    {comments.length === 0 ? (
+                      <div className="text-center py-8">
+                        <FaComment className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-600">No reviews yet. Be the first to share your experience!</p>
+                      </div>
+                    ) : (
+                      comments.map((comment) => (
+                        <div key={comment.id} className="border-b border-gray-200 pb-6 last:border-0">
+                          <div className="flex items-start space-x-3 mb-3">
+                            <div className="flex-shrink-0">
+                              {comment.profiles?.avatar_url ? (
+                                <img
+                                  src={comment.profiles.avatar_url}
+                                  alt={comment.profiles.name}
+                                  className="w-10 h-10 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                                  <FaUser className="w-5 h-5 text-green-900" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-semibold text-gray-900">
+                                  {comment.profiles?.name || "Anonymous"}
+                                </h4>
+                                <span className="text-sm text-gray-500">
+                                  {new Date(comment.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-1 mb-2">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <FaStar
+                                    key={star}
+                                    className={`w-4 h-4 ${
+                                      star <= comment.rating ? "text-yellow-400" : "text-gray-300"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              <p className="text-gray-700">{comment.content}</p>
+                              <button
+                                onClick={() => handleLikeComment(comment.id)}
+                                className="mt-2 text-gray-500 hover:text-green-900 flex items-center space-x-1"
+                              >
+                                <FaRegThumbsUp className="w-4 h-4" />
+                                <span className="text-sm">Helpful</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {userHasApplied && (

@@ -22,8 +22,8 @@ const Sidebar = ({
   ];
 
   return (
-    <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed md:relative md:translate-x-0 z-30 w-72 bg-gradient-to-b from-green-950 to-emerald-900 text-white h-screen transition-all duration-500 shadow-2xl`}>
-      <div className="p-6 h-full flex flex-col">
+    <div className={`${sidebarOpen ? 'translate-x-full' : 'translate-x-0'} fixed hidden lg:flex md:relative md:translate-x-0 z-30 w-72 bg-gradient-to-b from-green-950 to-emerald-900 text-white h-screen transition-all duration-500 shadow-2xl`}>
+      <div className="p-6 h-full flex flex-col ">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-white pt-16">Admin Hub</h2>
           <p className="text-emerald-200 text-sm mt-1">Dashboard v2.0</p>

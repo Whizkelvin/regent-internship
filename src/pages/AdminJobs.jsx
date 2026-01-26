@@ -1,28 +1,29 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { 
   FaBars, FaWindowMaximize, FaWindowMinimize, 
-  FaArrowUp, FaSync, FaTimes
+  FaArrowUp, FaSync, FaTimes,
+  FaChevronDown, FaChevronUp, FaBell, FaUserCircle
 } from 'react-icons/fa';
-import { supabaseAdmin, isAdminAvailable } from '../supabaseClient';
+import { supabaseAdmin } from '../supabaseClient';
 // Import Components
 import Sidebar from '../components/admin/Sidebar';
 import StatsCards from '../components/admin/StatsCards';
 import JobForm from '../components/admin/JobForm';
 import JobsTab from '../components/admin/JobsTab';
-import UsersTab from '../components/admin/UsersTab.jsx';
+import UsersTab from '../components/admin/UsersTab';
 import DeleteModal from '../components/admin/DeleteModal';
 import ApplicationsTab from '../components/admin/ApplicationsTab';
 import MessagesTab from '../components/admin/MessagesTab';
+import MessageModal from '../components/admin/MessageModal';
 
 const AdminJobs = () => {
   // State Management
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
- 
   const [filteredJobs, setFilteredJobs] = useState([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -46,19 +47,20 @@ const AdminJobs = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('jobs');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [mobileMenuCollapsed, setMobileMenuCollapsed] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
+  
   const navigate = useNavigate();
+  const sidebarRef = useRef(null);
+  const mobileMenuRef = useRef(null);
 
   // Applications states
   const [applications, setApplications] = useState([]);
-  const [filteredApplications, setFilteredApplications] = useState([]);
   const [applicationSearchTerm, setApplicationSearchTerm] = useState('');
+  const [applicationStatusFilter, setApplicationStatusFilter] = useState('all');
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [showApplicationDetails, setShowApplicationDetails] = useState(false);
-  const [showMessageModal, setShowMessageModal] = useState(false);
-  const [message, setMessage] = useState('');
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const [applicationStatusFilter, setApplicationStatusFilter] = useState('all');
-  const [applicationMessages, setApplicationMessages] = useState([]);
 
   // Users states
   const [users, setUsers] = useState([]);
@@ -66,6 +68,12 @@ const AdminJobs = () => {
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserDetails, setShowUserDetails] = useState(false);
+
+  // Message states
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [message, setMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [applicationMessages, setApplicationMessages] = useState([]);
 
   // Form states
   const [newJob, setNewJob] = useState({
@@ -98,6 +106,34 @@ const AdminJobs = () => {
     is_active: true
   });
 
+  // Fetch user profile
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserProfile(user);
+      }
+    };
+    fetchUserProfile();
+  }, []);
+
+  // Click outside to close mobile menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target)) {
+        setShowMobileMenu(false);
+      }
+    };
+
+    if (showMobileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMobileMenu]);
+
   // Fix input focus issue
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -113,84 +149,97 @@ const AdminJobs = () => {
   }, []);
 
   const sendMessageToApplicant = async () => {
-  if (!message.trim() || !selectedApplication) return;
+    if (!message.trim() || !selectedApplication) return;
 
-  try {
-    setSendingMessage(true);
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // Create message record
-    const { error } = await supabase
-      .from('contact_messages')
-      .insert([{
-        full_name: selectedApplication.full_name,
-        email: selectedApplication.email,
-        subject: 'Admin Message',
-        message: message,
-        message_type: 'admin_reply',
-        created_at: new Date().toISOString()
-      }]);
-
-    if (error) throw error;
-
-    // Send email notification (you'll need to set up email service)
-    // This is a placeholder - implement based on your email service
     try {
-      const { error: emailError } = await supabase.functions.invoke('send-email', {
-        body: {
-          to: selectedApplication.email,
-          subject: 'Message from Job Portal Admin',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>New Message from Job Portal Admin</h2>
-              <p>Hello ${selectedApplication.full_name},</p>
-              <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                ${message.replace(/\n/g, '<br>')}
+      setSendingMessage(true);
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from('application_messages')
+        .insert([{
+          full_name: selectedApplication.full_name,
+          email: selectedApplication.email,
+          subject: 'Admin Message',
+          message: message,
+          message_type: 'admin_reply',
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+
+      try {
+        await supabase.functions.invoke('send-email', {
+          body: {
+            to: selectedApplication.email,
+            subject: 'Message from Job Portal Admin',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>New Message from Job Portal Admin</h2>
+                <p>Hello ${selectedApplication.full_name},</p>
+                <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                  ${message.replace(/\n/g, '<br>')}
+                </div>
+                <p>Best regards,<br>Job Portal Team</p>
               </div>
-              <p>Best regards,<br>Job Portal Team</p>
-            </div>
-          `
-        }
-      });
-      
-      if (emailError) console.error('Email error:', emailError);
-    } catch (emailError) {
-      console.error('Failed to send email:', emailError);
+            `
+          }
+        });
+      } catch (emailError) {
+        console.error('Failed to send email:', emailError);
+      }
+
+      setMessage('');
+      setShowMessageModal(false);
+      fetchApplicationMessages();
+      showNotification('Success', 'Message sent successfully', 'success');
+    } catch (error) {
+      console.error('Error sending message:', error);
+      showNotification('Error', 'Failed to send message', 'error');
+    } finally {
+      setSendingMessage(false);
     }
+  };
 
-    setMessage('');
-    setShowMessageModal(false);
-    fetchApplicationMessages();
-    showNotification('Success', 'Message sent successfully', 'success');
-  } catch (error) {
-    console.error('Error sending message:', error);
-    showNotification('Error', 'Failed to send message', 'error');
-  } finally {
-    setSendingMessage(false);
-  }
-};
-
-// Add this function to fetch contact messages properly
-const fetchApplicationMessages = async () => {
+ const fetchApplicationMessages = useCallback(async (applicationId) => {
   try {
-    const { data, error } = await supabase
-      .from('contact_messages')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // If fetching messages for a specific application
+    if (applicationId) {
+      const { data, error } = await supabase
+        .from("application_messages")
+        .select(`
+          *,
+          sender:sender_id (id, email)
+        `)
+        .eq("application_id", applicationId)
+        .order("created_at", { ascending: true });
 
-    if (error) throw error;
-    setApplicationMessages(data || []);
+      if (!error) {
+        console.log("Application messages:", data);
+        setApplicationMessages(data || []);
+      }
+    } else {
+      // Fetch all messages for admin
+      const { data, error } = await supabase
+        .from("application_messages")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error) {
+        console.log("All messages:", data);
+        setApplicationMessages(data || []);
+      }
+    }
   } catch (error) {
-    console.error('Error fetching messages:', error);
-    showNotification('Error', 'Failed to load messages', 'error');
+    console.error("Error fetching messages:", error);
+    setApplicationMessages([]);
   }
-};
-
+}, []);
   // Toggle fullscreen
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(err => {
-        console.log(`Error attempting to enable fullscreen: ${err.message}`);
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
       });
       setIsFullscreen(true);
     } else {
@@ -290,18 +339,15 @@ const fetchApplicationMessages = async () => {
   // Create new job
   const handleCreateJob = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
       const jobData = {
         ...newJob,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('jobs')
-        .insert([jobData])
-        .select();
+        .insert([jobData]);
 
       if (error) throw error;
 
@@ -416,208 +462,166 @@ const fetchApplicationMessages = async () => {
     }
   };
 
-  // // Fetch application messages
-  // const fetchApplicationMessages = async () => {
-  //   try {
-  //     const { data, error } = await supabase
-  //       .from('contact_messages')
-  //       .select(`
-  //         *,
-  //         subjects:subject,
-  //         message:message
-  //       `)
-  //       .order('created_at', { ascending: false });
-
-  //     if (!error) setApplicationMessages(data || []);
-  //   } catch (error) {
-  //     console.error('Error fetching messages:', error);
-  //     showNotification('Error', 'Failed to load messages', 'error');
-  //   }
-  // };
-
-  // Fetch users from Supabase auth and profiles
-useEffect(() => {
-  if (isAdminAvailable()) {
-    console.log('✅ Admin features enabled');
-  } else {
-    console.log('⚠️ Admin features disabled - add service role key');
-  }
-}, []);
-
-// Use admin client when available
-const fetchUsers = async () => {
-  try {
-    setLoading(true);
-    console.log('🔄 Starting to fetch users...');
-    
-    // Check if admin client is available
-    if (!supabaseAdmin) {
-      console.warn('Admin client not available, falling back to profiles...');
-      throw new Error('Admin client not configured');
-    }
-    
-    // 1. Get all users with admin client
-    console.log('📋 Fetching all users from Auth...');
-    const { data: { users }, error: authError } = await supabaseAdmin.auth.admin.listUsers();
-    
-    if (authError) {
-      console.error('Auth API error:', authError);
-      throw new Error(`Failed to fetch users from Auth: ${authError.message}`);
-    }
-    
-    console.log(`✅ Found ${users?.length || 0} users in Auth`);
-    
-    // 2. Get profiles for additional info
-    console.log('📋 Fetching profiles...');
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('*');
-    
-    if (profilesError) {
-      console.warn('Profiles fetch warning:', profilesError.message);
-    }
-    
-    console.log(`✅ Found ${profiles?.length || 0} profiles`);
-    
-    // 3. Merge data
-    const mergedUsers = (users || []).map(authUser => {
-      const profile = profiles?.find(p => p.id === authUser.id) || {};
-      
-      // Format date for display
-      const lastActive = authUser.last_sign_in_at 
-        ? formatDistanceToNow(new Date(authUser.last_sign_in_at), { addSuffix: true })
-        : 'Never';
-      
-      const joinedDate = authUser.created_at 
-        ? formatDistanceToNow(new Date(authUser.created_at), { addSuffix: true })
-        : 'Recently';
-      
-      return {
-        id: authUser.id,
-        email: authUser.email,
-        full_name: profile.full_name || 
-                  authUser.user_metadata?.full_name || 
-                  authUser.email?.split('@')[0] || 
-                  'User',
-        role: profile.role || authUser.user_metadata?.role || 'user',
-        status: authUser.banned ? 'banned' : 'active',
-        phone: profile.phone || authUser.phone || null,
-        created_at: authUser.created_at,
-        formatted_created_at: joinedDate,
-        last_sign_in_at: authUser.last_sign_in_at,
-        formatted_last_active: lastActive,
-        email_confirmed: authUser.email_confirmed_at !== null,
-        last_active: authUser.last_sign_in_at || 'Never',
-        is_super_admin: authUser.is_super_admin || false,
-        raw_user: authUser // Keep raw data for debugging
-      };
-    });
-    
-    // Sort by created date (newest first)
-    mergedUsers.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    
-    console.log(`🎉 Successfully processed ${mergedUsers.length} users`);
-    
-    // 4. Update state
-    setUsers(mergedUsers);
-    setFilteredUsers(mergedUsers);
-    
-    // 5. Update stats
-    setStats(prev => ({
-      ...prev,
-      users: mergedUsers.length,
-      activeUsers: mergedUsers.filter(u => u.status === 'active').length
-    }));
-    
-    showNotification('Success', `Loaded ${mergedUsers.length} users`, 'success');
-    
-  } catch (error) {
-    console.error('❌ Error in fetchUsers:', error);
-    
-    // Fallback: Try to get profiles only
+  const fetchUsers = async () => {
     try {
-      console.log('🔄 Falling back to profiles-only fetch...');
+      setLoading(true);
+      
+      if (!supabaseAdmin) {
+        throw new Error('Admin client not configured');
+      }
+      
+      const { data: { users }, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+      
+      if (authError) {
+        throw new Error(`Failed to fetch users from Auth: ${authError.message}`);
+      }
       
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
       
       if (profilesError) {
-        throw profilesError;
+        console.warn('Profiles fetch warning:', profilesError.message);
       }
       
-      const fallbackUsers = (profiles || []).map(profile => ({
-        id: profile.id,
-        email: profile.email || 'No email',
-        full_name: profile.full_name || profile.email?.split('@')[0] || 'User',
-        role: profile.role || 'user',
-        status: profile.banned ? 'banned' : 'active',
-        phone: profile.phone || null,
-        created_at: profile.created_at,
-        formatted_created_at: profile.created_at 
-          ? formatDistanceToNow(new Date(profile.created_at), { addSuffix: true })
-          : 'Recently',
-        last_sign_in_at: profile.last_sign_in_at || profile.created_at,
-        formatted_last_active: profile.last_sign_in_at 
-          ? formatDistanceToNow(new Date(profile.last_sign_in_at), { addSuffix: true })
-          : 'Never',
-        email_confirmed: true,
-        is_super_admin: profile.role === 'admin'
+      const mergedUsers = (users || []).map(authUser => {
+        const profile = profiles?.find(p => p.id === authUser.id) || {};
+        
+        const lastActive = authUser.last_sign_in_at 
+          ? formatDistanceToNow(new Date(authUser.last_sign_in_at), { addSuffix: true })
+          : 'Never';
+        
+        const joinedDate = authUser.created_at 
+          ? formatDistanceToNow(new Date(authUser.created_at), { addSuffix: true })
+          : 'Recently';
+        
+        return {
+          id: authUser.id,
+          email: authUser.email,
+          full_name: profile.full_name || 
+                    authUser.user_metadata?.full_name || 
+                    authUser.email?.split('@')[0] || 
+                    'User',
+          role: profile.role || authUser.user_metadata?.role || 'user',
+          status: authUser.banned ? 'banned' : 'active',
+          phone: profile.phone || authUser.phone || null,
+          created_at: authUser.created_at,
+          formatted_created_at: joinedDate,
+          last_sign_in_at: authUser.last_sign_in_at,
+          formatted_last_active: lastActive,
+          email_confirmed: authUser.email_confirmed_at !== null,
+          last_active: authUser.last_sign_in_at || 'Never',
+          is_super_admin: authUser.is_super_admin || false,
+          raw_user: authUser
+        };
+      });
+      
+      mergedUsers.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      setUsers(mergedUsers);
+      setFilteredUsers(mergedUsers);
+      
+      setStats(prev => ({
+        ...prev,
+        users: mergedUsers.length,
+        activeUsers: mergedUsers.filter(u => u.status === 'active').length
       }));
       
-      console.log(`✅ Fallback loaded ${fallbackUsers.length} users from profiles`);
+    } catch (error) {
+      console.error('Error fetching users:', error);
       
-      setUsers(fallbackUsers);
-      setFilteredUsers(fallbackUsers);
-      
-      showNotification(
-        'Info', 
-        `Loaded ${fallbackUsers.length} users (profiles only)`, 
-        'info'
-      );
-      
-    } catch (fallbackError) {
-      console.error('❌ Fallback also failed:', fallbackError);
-      
-      // Last resort: Show current user only
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      if (currentUser) {
-        const singleUser = [{
-          id: currentUser.id,
-          email: currentUser.email,
-          full_name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Admin',
-          role: 'admin',
-          status: 'active',
-          created_at: currentUser.created_at,
-          formatted_created_at: formatDistanceToNow(new Date(currentUser.created_at), { addSuffix: true }),
-          last_sign_in_at: currentUser.last_sign_in_at,
-          formatted_last_active: currentUser.last_sign_in_at 
-            ? formatDistanceToNow(new Date(currentUser.last_sign_in_at), { addSuffix: true })
-            : 'Now',
-          email_confirmed: true,
-          is_super_admin: true
-        }];
+      try {
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
         
-        setUsers(singleUser);
-        setFilteredUsers(singleUser);
+        if (profilesError) {
+          throw profilesError;
+        }
+        
+        const fallbackUsers = (profiles || []).map(profile => ({
+          id: profile.id,
+          email: profile.email || 'No email',
+          full_name: profile.full_name || profile.email?.split('@')[0] || 'User',
+          role: profile.role || 'user',
+          status: profile.banned ? 'banned' : 'active',
+          phone: profile.phone || null,
+          created_at: profile.created_at,
+          formatted_created_at: profile.created_at 
+            ? formatDistanceToNow(new Date(profile.created_at), { addSuffix: true })
+            : 'Recently',
+          last_sign_in_at: profile.last_sign_in_at || profile.created_at,
+          formatted_last_active: profile.last_sign_in_at 
+            ? formatDistanceToNow(new Date(profile.last_sign_in_at), { addSuffix: true })
+            : 'Never',
+          email_confirmed: true,
+          is_super_admin: profile.role === 'admin'
+        }));
+        
+        setUsers(fallbackUsers);
+        setFilteredUsers(fallbackUsers);
         
         showNotification(
-          'Limited View', 
-          'Only showing current user. Check admin configuration.',
-          'warning'
+          'Info', 
+          `Loaded ${fallbackUsers.length} users from profiles`, 
+          'info'
         );
-      } else {
-        setUsers([]);
-        setFilteredUsers([]);
-        showNotification('Error', 'Failed to load any user data', 'error');
+        
+      } catch (fallbackError) {
+        console.error('Fallback failed:', fallbackError);
+        
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        
+        if (currentUser) {
+          const singleUser = [{
+            id: currentUser.id,
+            email: currentUser.email,
+            full_name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Admin',
+            role: 'admin',
+            status: 'active',
+            created_at: currentUser.created_at,
+            formatted_created_at: formatDistanceToNow(new Date(currentUser.created_at), { addSuffix: true }),
+            last_sign_in_at: currentUser.last_sign_in_at,
+            formatted_last_active: currentUser.last_sign_in_at 
+              ? formatDistanceToNow(new Date(currentUser.last_sign_in_at), { addSuffix: true })
+              : 'Now',
+            email_confirmed: true,
+            is_super_admin: true
+          }];
+          
+          setUsers(singleUser);
+          setFilteredUsers(singleUser);
+          
+          showNotification(
+            'Limited View', 
+            'Only showing current user. Check admin configuration.',
+            'warning'
+          );
+        } else {
+          setUsers([]);
+          setFilteredUsers([]);
+          showNotification('Error', 'Failed to load any user data', 'error');
+        }
       }
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
+  // Mobile navigation functions
+  const toggleMobileMenu = () => {
+    setShowMobileMenu(!showMobileMenu);
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setShowMobileMenu(false);
+  };
+
+  const toggleMobileMenuCollapse = () => {
+    setMobileMenuCollapsed(!mobileMenuCollapsed);
+  };
 
   // Delete user from auth and profiles
   const handleDeleteUser = async (userId) => {
@@ -626,12 +630,10 @@ const fetchUsers = async () => {
     }
 
     try {
-      // Delete from auth
       const { error: authError } = await supabase.auth.admin.deleteUser(userId);
       
       if (authError) throw authError;
       
-      // Delete from profiles
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
@@ -719,61 +721,59 @@ const fetchUsers = async () => {
 
   // Notification system
   const showNotification = (title, message, type = 'info') => {
-    // Implement your toast notification system here
-    console.log(`${type.toUpperCase()}: ${title} - ${message}`);
-    // For now, using alert
     alert(`${title}: ${message}`);
   };
-  const markMessageAsRead = async (messageId) => {
+
+// In AdminJobs component - UPDATED markMessageAsRead function
+const markMessageAsRead = async (messageId) => {
   try {
     const { error } = await supabase
-      .from('contact_messages') // Make sure this matches your table name
-      .update({ is_read: true })
+      .from('application_messages')
+      .update({ 
+        is_read: true,
+        updated_at: new Date().toISOString() 
+      })
       .eq('id', messageId);
 
     if (error) throw error;
     
-    fetchApplicationMessages(); // Refresh the messages
+    // Immediately update the local state for instant UI feedback
+    setApplicationMessages(prev => 
+      prev.map(msg => 
+        msg.id === messageId ? { ...msg, is_read: true } : msg
+      )
+    );
+    
     showNotification('Success', 'Message marked as read', 'success');
   } catch (error) {
     console.error('Error marking message as read:', error);
     showNotification('Error', 'Failed to mark message as read', 'error');
+    throw error; // Re-throw so MessagesTab can handle it
   }
 };
 
-// Delete message
+// Also update the deleteMessage function:
 const deleteMessage = async (messageId) => {
   try {
     const { error } = await supabase
-      .from('contact_messages') // Make sure this matches your table name
+      .from('application_messages')
       .delete()
       .eq('id', messageId);
 
     if (error) throw error;
     
-    fetchApplicationMessages(); // Refresh the messages
+    // Immediately update the local state
+    setApplicationMessages(prev => 
+      prev.filter(msg => msg.id !== messageId)
+    );
+    
     showNotification('Success', 'Message deleted', 'success');
   } catch (error) {
     console.error('Error deleting message:', error);
     showNotification('Error', 'Failed to delete message', 'error');
+    throw error; // Re-throw so MessagesTab can handle it
   }
 };
-
-// Update the fetchApplicationMessages function
-// const fetchApplicationMessages = async () => {
-//   try {
-//     const { data, error } = await supabase
-//       .from('contact_messages') // Make sure this is the correct table name
-//       .select('*')
-//       .order('created_at', { ascending: false });
-
-//     if (error) throw error;
-//     setApplicationMessages(data || []);
-//   } catch (error) {
-//     console.error('Error fetching messages:', error);
-//     showNotification('Error', 'Failed to load messages', 'error');
-//   }
-// };
 
   // Active tab content
   const renderActiveTab = () => {
@@ -813,7 +813,6 @@ const deleteMessage = async (messageId) => {
         return (
           <ApplicationsTab
             applications={applications}
-            filteredApplications={filteredApplications}
             applicationSearchTerm={applicationSearchTerm}
             setApplicationSearchTerm={setApplicationSearchTerm}
             applicationStatusFilter={applicationStatusFilter}
@@ -848,23 +847,193 @@ const deleteMessage = async (messageId) => {
             }}
           />
         );
-case 'messages':
-  return (
-    <MessagesTab
-      applicationMessages={applicationMessages}
-      applications={applications}
-      loading={loading}
-      fetchApplicationMessages={fetchApplicationMessages}
-      setSelectedApplication={setSelectedApplication}
-      setShowMessageModal={setShowMessageModal}
-      setShowApplicationDetails={setShowApplicationDetails}
-      markMessageAsRead={markMessageAsRead} // Pass the function
-      deleteMessage={deleteMessage} // Pass the delete function
-    />
-  );
+      case 'messages':
+        return (
+          <MessagesTab
+            applicationMessages={applicationMessages}
+            applications={applications}
+            loading={loading}
+            fetchApplicationMessages={fetchApplicationMessages}
+            setSelectedApplication={setSelectedApplication}
+            setShowMessageModal={setShowMessageModal}
+            setShowApplicationDetails={setShowApplicationDetails}
+            markMessageAsRead={markMessageAsRead}
+            deleteMessage={deleteMessage}
+          />
+        );
       default:
         return null;
     }
+  };
+
+  // Enhanced Mobile Navigation Component
+  const MobileNavigation = () => {
+    return (
+      <div className="md:hidden">
+        {/* Top Navigation Bar */}
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-green-950 to-emerald-900 text-white shadow-2xl">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={toggleMobileMenu}
+                className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 transition-all duration-300"
+                aria-label="Toggle menu"
+              >
+                <FaBars className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-xl font-bold">Admin Panel</h1>
+                <p className="text-xs text-emerald-200">
+                  {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <FaBell className="w-5 h-5 text-emerald-200" />
+                {stats.unreadMessages > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-xs rounded-full flex items-center justify-center">
+                    {stats.unreadMessages}
+                  </span>
+                )}
+              </div>
+              {userProfile && (
+                <div className="flex items-center space-x-2">
+                  <FaUserCircle className="w-8 h-8 text-emerald-200" />
+                  <span className="text-sm font-medium truncate max-w-[80px]">
+                    {userProfile.email?.split('@')[0]}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Menu Overlay */}
+        {showMobileMenu && (
+          <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={() => setShowMobileMenu(false)}>
+            <div 
+              ref={mobileMenuRef}
+              className="absolute left-0 right-0 top-0 bg-gradient-to-b from-green-950 to-emerald-900 text-white shadow-2xl rounded-b-3xl overflow-hidden animate-slideInDown"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Menu Header */}
+              <div className="p-6 border-b border-emerald-700/50">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-2xl font-bold">Navigation</h2>
+                    <p className="text-emerald-200 text-sm">Manage your admin tasks</p>
+                  </div>
+                  <button
+                    onClick={() => setShowMobileMenu(false)}
+                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-300"
+                  >
+                    <FaTimes className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                {/* Quick Stats */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-white/5 rounded-xl p-3">
+                    <p className="text-xs text-emerald-300">Active Jobs</p>
+                    <p className="text-xl font-bold">{stats.active}</p>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3">
+                    <p className="text-xs text-emerald-300">Pending Apps</p>
+                    <p className="text-xl font-bold">{stats.pendingApplications}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Menu Items */}
+              <div className="p-4">
+                <button
+                  onClick={toggleMobileMenuCollapse}
+                  className="flex items-center justify-between w-full p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all duration-300 mb-3"
+                >
+                  <span className="font-medium">Dashboard Sections</span>
+                  {mobileMenuCollapsed ? <FaChevronDown /> : <FaChevronUp />}
+                </button>
+
+                {!mobileMenuCollapsed && (
+                  <div className="space-y-2 mb-6">
+                    {['jobs', 'applications', 'messages', 'users'].map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => handleTabChange(tab)}
+                        className={`w-full text-left p-4 rounded-xl transition-all duration-300 flex items-center space-x-3 ${
+                          activeTab === tab
+                            ? 'bg-emerald-600 text-white shadow-lg'
+                            : 'bg-white/5 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                          <span className="text-sm font-bold">
+                            {tab.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium capitalize">{tab}</p>
+                          <p className="text-xs text-emerald-200">
+                            {tab === 'jobs' && 'Manage job listings'}
+                            {tab === 'applications' && 'Review applications'}
+                            {tab === 'messages' && 'View messages'}
+                            {tab === 'users' && 'Manage users'}
+                          </p>
+                        </div>
+                        {activeTab === tab && (
+                          <div className="w-2 h-2 bg-emerald-300 rounded-full"></div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="space-y-3">
+                  <button
+                    onClick={() => {
+                      setShowCreateModal(true);
+                      setShowMobileMenu(false);
+                    }}
+                    className="w-full p-4 bg-gradient-to-r from-emerald-600 to-green-500 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-300 flex items-center justify-center space-x-2"
+                  >
+                    <span>+ Create New Job</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      fetchJobs();
+                      fetchApplications();
+                      fetchUsers();
+                      setShowMobileMenu(false);
+                    }}
+                    className="w-full p-4 bg-white/10 rounded-xl font-medium hover:bg-white/20 transition-all duration-300 flex items-center justify-center space-x-2"
+                  >
+                    <FaSync className="w-4 h-4" />
+                    <span>Refresh All</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handleSignOut();
+                      setShowMobileMenu(false);
+                    }}
+                    className="w-full p-4 bg-red-500/20 text-red-300 rounded-xl font-medium hover:bg-red-500/30 transition-all duration-300"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add some spacing for the fixed header */}
+        <div className="h-16"></div>
+      </div>
+    );
   };
 
   if (loading && activeTab === 'jobs') {
@@ -884,10 +1053,13 @@ case 'messages':
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Mobile Sidebar Toggle */}
+      {/* Mobile Navigation */}
+      <MobileNavigation />
+
+      {/* Desktop Sidebar Toggle */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="fixed top-6 left-6 z-40 bg-gradient-to-r from-green-900 to-emerald-800 text-white p-3 rounded-xl shadow-2xl hover:shadow-3xl transition-all duration-300 md:hidden"
+        className="fixed top-6 left-6 z-40 bg-gradient-to-r from-green-900 to-emerald-800 text-white p-3 rounded-xl shadow-2xl hover:shadow-3xl transition-all duration-300 hidden md:block"
         aria-label="Toggle sidebar"
       >
         <FaBars className="w-5 h-5" />
@@ -914,7 +1086,7 @@ case 'messages':
       </div>
 
       <div className="flex">
-        {/* Sidebar */}
+        {/* Desktop Sidebar */}
         <Sidebar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
@@ -927,7 +1099,7 @@ case 'messages':
 
         {/* Main Content */}
         <div className="flex-1">
-          <div className="bg-gradient-to-r from-green-950 to-emerald-900 text-white">
+          <div className="bg-gradient-to-r from-green-950 to-emerald-900 text-white hidden md:block">
             <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
@@ -1004,16 +1176,16 @@ case 'messages':
       />
 
       {showMessageModal && (
-  <MessageModal
-    showMessageModal={showMessageModal}
-    setShowMessageModal={setShowMessageModal}
-    selectedApplication={selectedApplication}
-    message={message}
-    setMessage={setMessage}
-    sendingMessage={sendingMessage}
-    sendMessageToApplicant={sendMessageToApplicant}
-  />
-)}
+        <MessageModal
+          showMessageModal={showMessageModal}
+          setShowMessageModal={setShowMessageModal}
+          selectedApplication={selectedApplication}
+          message={message}
+          setMessage={setMessage}
+          sendingMessage={sendingMessage}
+          sendMessageToApplicant={sendMessageToApplicant}
+        />
+      )}
     </div>
   );
 };
