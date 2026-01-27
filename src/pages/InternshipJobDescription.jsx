@@ -99,7 +99,6 @@ const MessagesSection = ({
     }
   }, [applicationMessages, showMessages]);
 
-  // Check if currentUserId is properly passed
   if (!currentUserId) {
     return (
       <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-6 mt-8">
@@ -142,10 +141,8 @@ const MessagesSection = ({
               </div>
             ) : (
               applicationMessages.map((message) => {
-                const isCurrentUser = message.sender_id === currentUserId;
-                const senderName = message.sender?.full_name || 
-                                  message.sender?.email?.split('@')[0] || 
-                                  (isCurrentUser ? 'You' : 'Admin');
+                const isCurrentUser = message.is_current_user;
+                const senderName = message.full_name || 'Unknown';
                 
                 return (
                   <div
@@ -165,9 +162,7 @@ const MessagesSection = ({
                         <FaUserCircle className="w-4 h-4 text-gray-500" />
                         <span className="text-sm font-medium">{senderName}</span>
                         <span className="text-xs text-gray-500">
-                          {new Date(message.created_at).toLocaleString([], {
-                            month: 'short',
-                            day: 'numeric',
+                          {new Date(message.created_at).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
@@ -245,6 +240,8 @@ const InternshipJobDescription = () => {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
+
+  
 
   // Fixed: Separate data fetching from user-specific checks
   useEffect(() => {
@@ -347,56 +344,188 @@ const InternshipJobDescription = () => {
     [id]
   );
 
-  const fetchComments = useCallback(
-    async (signal) => {
-      try {
-        const { data, error } = await supabase
-          .from("job_reviews")
-          .select(
-            `
-          *,
-          profiles:user_id (
-            name,
-            avatar_url
-          )
-        `
-          )
-          .eq("job_id", id)
-          .order("created_at", { ascending: false });
+const fetchComments = useCallback(
+  async (signal) => {
+    try {
+      console.log('🔄 Fetching comments for job:', id);
+      
+      // Fetch all comments
+      const { data: commentsData, error } = await supabase
+        .from("job_reviews")
+        .select("*")
+        .eq("job_id", id)
+        .order("created_at", { ascending: false });
 
-        if (!error) setComments(data || []);
-      } catch (error) {
-        if (error.name === "AbortError") return;
-        console.error("Error fetching comments:", error);
+      if (error) throw error;
+      
+      console.log(`✅ Found ${commentsData?.length || 0} comments:`, commentsData);
+
+      if (!commentsData || commentsData.length === 0) {
+        setComments([]);
+        return;
       }
-    },
-    [id]
-  );
+
+      // Get current user
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const currentUserId = currentUser?.id;
+
+      // Get ALL user IDs from comments
+      const userIds = [...new Set(commentsData
+        .map(comment => comment.user_id)
+        .filter(Boolean)
+      )];
+
+      console.log('👤 All user IDs in comments:', userIds);
+
+      // Fetch user info for ALL users
+      const usersMap = {};
+      
+      if (userIds.length > 0) {
+        // Method 1: Try to get from profiles table
+        try {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, email, name, full_name, username, avatar_url')
+            .in('id', userIds);
+          
+          if (profiles) {
+            profiles.forEach(profile => {
+              usersMap[profile.id] = {
+                display_name: profile.full_name || profile.name || profile.username || profile.email?.split('@')[0] || 'User',
+                email: profile.email,
+                avatar_url: profile.avatar_url
+              };
+            });
+            console.log('✅ Got user info from profiles:', Object.keys(usersMap).length);
+          }
+        } catch (profileError) {
+          console.warn('Could not fetch from profiles:', profileError);
+        }
+
+        // Method 2: For any missing users, try auth (requires admin)
+        const missingUserIds = userIds.filter(id => !usersMap[id]);
+        if (missingUserIds.length > 0) {
+          console.log('🔄 Getting missing users from auth:', missingUserIds);
+          
+          try {
+            // This requires service role key
+            const { data: { users } } = await supabase.auth.admin.listUsers();
+            
+            if (users) {
+              users.forEach(user => {
+                if (missingUserIds.includes(user.id) && !usersMap[user.id]) {
+                  usersMap[user.id] = {
+                    display_name: user.user_metadata?.full_name || 
+                                user.user_metadata?.name || 
+                                user.email?.split('@')[0] || 
+                                'User',
+                    email: user.email,
+                    avatar_url: user.user_metadata?.avatar_url
+                  };
+                }
+              });
+            }
+          } catch (authError) {
+            console.warn('Could not fetch from auth:', authError);
+          }
+        }
+      }
+
+      // Process comments
+      const processedComments = commentsData.map(comment => {
+        const userInfo = comment.user_id ? usersMap[comment.user_id] : null;
+        const isCurrentUser = currentUserId && comment.user_id === currentUserId;
+        
+        // Priority for display name:
+        // 1. Already stored in comment
+        // 2. From fetched user info
+        // 3. Generic name
+        let displayName = comment.user_display_name;
+        let avatarUrl = comment.user_avatar_url;
+        let email = comment.user_email;
+        
+        if (!displayName && userInfo) {
+          displayName = userInfo.display_name;
+          avatarUrl = userInfo.avatar_url || avatarUrl;
+          email = userInfo.email || email;
+        }
+        
+        if (!displayName && comment.user_id) {
+          displayName = `User_${comment.user_id.substring(0, 8)}`;
+        }
+        
+        if (!displayName) {
+          displayName = 'Anonymous';
+        }
+        
+        // If it's current user, override
+        if (isCurrentUser) {
+          displayName = 'You';
+          email = currentUser?.email || 'Your email';
+        }
+
+        return {
+          ...comment,
+          user_display_name: displayName,
+          user_avatar_url: avatarUrl,
+          user_email: email,
+          is_current_user: isCurrentUser,
+          // For compatibility with existing code
+          profiles: {
+            name: displayName,
+            avatar_url: avatarUrl
+          }
+        };
+      });
+
+      console.log('🎉 Final processed comments:', processedComments);
+      setComments(processedComments);
+
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      console.error("❌ Error fetching comments:", error);
+      setComments([]);
+    }
+  },
+  [id]
+);
+
 
   const fetchApplicationMessages = useCallback(async (applicationId) => {
-    try {
-      const { data, error } = await supabase
-        .from("application_messages")
-        .select(`
-          *,
-          sender:sender_id (id, full_name, email),
-          receiver:receiver_id (id, full_name, email)
-        `)
-        .eq("application_id", applicationId)
-        .order("created_at", { ascending: true });
+  try {
+    console.log('🔄 Fetching messages for application:', applicationId);
+    
+    // Direct query - no joins at all
+    const { data: messages, error } = await supabase
+      .from("application_messages")
+      .select("id, application_id, sender_id, message, is_read, created_at") // Explicit columns only
+      .eq("application_id", applicationId)
+      .order("created_at", { ascending: true });
 
-      if (!error) {
-        console.log("Fetched messages:", data);
-        setApplicationMessages(data || []);
-      } else {
-        console.error("Error fetching messages:", error);
-        setApplicationMessages([]);
-      }
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-      setApplicationMessages([]);
-    }
-  }, []);
+    if (error) throw error;
+    
+    console.log(`✅ Found ${messages?.length || 0} messages`);
+    
+    // Get current user
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    
+    // Simple processing - just mark if it's from current user
+    const simpleMessages = messages.map(msg => ({
+      ...msg,
+      // If we have sender info in the message itself, use it
+      full_name: msg.sender_id === currentUser?.id ? 'You' : 
+                (msg.full_name || 'Applicant'),
+      email: msg.email || 'No email',
+      is_current_user: msg.sender_id === currentUser?.id
+    }));
+    
+    setApplicationMessages(simpleMessages);
+    
+  } catch (error) {
+    console.error('❌ Error fetching messages:', error);
+    setApplicationMessages([]);
+  }
+}, []);
 
   // Fixed: Stable input handlers
   const handleInputChange = useCallback(
@@ -679,68 +808,103 @@ const InternshipJobDescription = () => {
     console.log("Liked comment:", commentId);
   }, []);
 
-  const handleAddComment = useCallback(async (e) => {
-    e.preventDefault();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      alert('Please sign in to post a review');
-      return;
-    }
-    
-    if (!newComment.trim()) {
-      alert('Please write a review before posting');
-      return;
-    }
+const handleAddComment = useCallback(async (e) => {
+  e.preventDefault();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    alert('Please sign in to post a review');
+    return;
+  }
+  
+  if (!newComment.trim()) {
+    alert('Please write a review before posting');
+    return;
+  }
 
-    setCommentLoading(true);
+  setCommentLoading(true);
 
-    try {
-      // Insert without expecting the profile relationship
-      const { data, error } = await supabase
+  try {
+    // Get comprehensive user info
+    const userDisplayName = user.user_metadata?.full_name || 
+                          user.user_metadata?.name || 
+                          user.email?.split('@')[0] || 
+                          'User';
+    
+    const userAvatar = user.user_metadata?.avatar_url;
+    const userEmail = user.email;
+
+    console.log('📝 Storing review with user:', {
+      id: user.id,
+      name: userDisplayName,
+      email: userEmail
+    });
+
+    // Insert with ALL user info
+    const { data, error } = await supabase
+      .from('job_reviews')
+      .insert([
+        {
+          job_id: id,
+          user_id: user.id,
+          user_display_name: userDisplayName,
+          user_email: userEmail,
+          user_avatar_url: userAvatar,
+          content: newComment.trim(),
+          rating: rating,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Insert error:', error);
+      // Try without the user columns
+      const { data: simpleData, error: simpleError } = await supabase
         .from('job_reviews')
         .insert([
           {
             job_id: id,
             user_id: user.id,
             content: newComment.trim(),
-            rating: rating
+            rating: rating,
+            created_at: new Date().toISOString()
           }
         ])
         .select()
         .single();
-
-      if (error) throw error;
-
-      // Get user profile separately
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('name, avatar_url')
-        .eq('id', user.id)
-        .single();
-
-      // Create the complete comment object manually
-      const newCommentWithProfile = {
-        ...data,
-        profiles: profileData || { 
-          name: user.user_metadata?.name || user.email?.split('@')[0] || 'Anonymous',
-          avatar_url: user.user_metadata?.avatar_url || null
-        }
-      };
-
-      // Add to comments list
-      setComments([newCommentWithProfile, ...comments]);
-      setNewComment('');
-      setRating(5);
+        
+      if (simpleError) throw simpleError;
       
-      alert('Review posted successfully!');
-    } catch (error) {
-      console.error('Error posting review:', error);
-      alert('Failed to post review: ' + error.message);
-    } finally {
-      setCommentLoading(false);
+      // Add user info manually
+      const commentWithUserInfo = {
+        ...simpleData,
+        user_display_name: userDisplayName,
+        user_email: userEmail,
+        user_avatar_url: userAvatar
+      };
+      
+      setComments(prev => [commentWithUserInfo, ...prev]);
+    } else {
+      // Success
+      setComments(prev => [data, ...prev]);
     }
-  }, [id, newComment, rating, comments]);
+    
+    // Reset form
+    setNewComment('');
+    setRating(5);
+    
+    alert('✅ Review posted successfully!');
+    
+  } catch (error) {
+    console.error('❌ Error posting review:', error);
+    alert('❌ Failed to post review: ' + error.message);
+  } finally {
+    setCommentLoading(false);
+  }
+}, [id, newComment, rating, comments]);
 
   const getJobTypeColor = useCallback((jobType) => {
     switch (jobType) {
@@ -1371,115 +1535,157 @@ const InternshipJobDescription = () => {
                 </div>
               )}
 
-              {activeTab === "reviews" && (
-                <div className="prose prose-lg max-w-none">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-6">
-                    Reviews & Feedback
-                  </h3>
-                  
-                  {/* Add Review Form */}
-                  <div className="bg-gray-50 rounded-xl p-6 mb-6">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                      Share Your Experience
-                    </h4>
-                    <form onSubmit={handleAddComment} className="space-y-4">
-                      <div className="flex items-center space-x-2 mb-4">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            onClick={() => handleRatingChange(star)}
-                            className={`text-2xl ${
-                              star <= rating ? "text-yellow-400" : "text-gray-300"
-                            } hover:text-yellow-500 transition-colors`}
-                          >
-                            <FaStar />
-                          </button>
-                        ))}
-                        <span className="text-sm text-gray-600 ml-2">
-                          {rating} out of 5
-                        </span>
-                      </div>
-                      <textarea
-                        value={newComment}
-                        onChange={handleNewCommentChange}
-                        rows="4"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent resize-none"
-                        placeholder="Share your thoughts about this opportunity..."
-                        disabled={commentLoading}
-                      />
-                      <div className="flex justify-end">
-                        <button
-                          type="submit"
-                          disabled={!newComment.trim() || commentLoading}
-                          className="px-6 py-3 bg-green-900 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-400 font-medium transition-colors flex items-center space-x-2"
-                        >
-                          <FaComment className="w-5 h-5" />
-                          <span>{commentLoading ? "Posting..." : "Post Review"}</span>
-                        </button>
-                      </div>
-                    </form>
-                  </div>
+{activeTab === "reviews" && (
+  <div className="prose prose-lg max-w-none">
+    <h3 className="text-2xl font-bold text-gray-900 mb-6">
+      Reviews & Feedback ({comments.length})
+    </h3>
+    
+ 
 
-                  {/* Reviews List */}
-                  <div className="space-y-6">
-                    {comments.length === 0 ? (
-                      <div className="text-center py-8">
-                        <FaComment className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-600">No reviews yet. Be the first to share your experience!</p>
-                      </div>
-                    ) : (
-                      comments.map((comment) => (
-                        <div key={comment.id} className="border-b border-gray-200 pb-6 last:border-0">
-                          <div className="flex items-start space-x-3 mb-3">
-                            <div className="flex-shrink-0">
-                              {comment.profiles?.avatar_url ? (
-                                <img
-                                  src={comment.profiles.avatar_url}
-                                  alt={comment.profiles.name}
-                                  className="w-10 h-10 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                                  <FaUser className="w-5 h-5 text-green-900" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <h4 className="font-semibold text-gray-900">
-                                  {comment.profiles?.name || "Anonymous"}
-                                </h4>
-                                <span className="text-sm text-gray-500">
-                                  {new Date(comment.created_at).toLocaleDateString()}
-                                </span>
-                              </div>
-                              <div className="flex items-center space-x-1 mb-2">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                  <FaStar
-                                    key={star}
-                                    className={`w-4 h-4 ${
-                                      star <= comment.rating ? "text-yellow-400" : "text-gray-300"
-                                    }`}
-                                  />
-                                ))}
-                              </div>
-                              <p className="text-gray-700">{comment.content}</p>
-                              <button
-                                onClick={() => handleLikeComment(comment.id)}
-                                className="mt-2 text-gray-500 hover:text-green-900 flex items-center space-x-1"
-                              >
-                                <FaRegThumbsUp className="w-4 h-4" />
-                                <span className="text-sm">Helpful</span>
-                              </button>
-                            </div>
+    {/* Add Review Form */}
+    <div className="bg-gray-50 rounded-xl p-6 mb-6">
+      <h4 className="text-lg font-semibold text-gray-900 mb-4">
+        Share Your Experience
+      </h4>
+      <form onSubmit={handleAddComment} className="space-y-4">
+        <div className="flex items-center space-x-2 mb-4">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <button
+              key={star}
+              type="button"
+              onClick={() => handleRatingChange(star)}
+              className={`text-2xl ${
+                star <= rating ? "text-yellow-400" : "text-gray-300"
+              } hover:text-yellow-500 transition-colors`}
+            >
+              <FaStar />
+            </button>
+          ))}
+          <span className="text-sm text-gray-600 ml-2">
+            {rating} out of 5
+          </span>
+        </div>
+        <textarea
+          value={newComment}
+          onChange={handleNewCommentChange}
+          rows="4"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent resize-none"
+          placeholder="Share your thoughts about this opportunity..."
+          disabled={commentLoading}
+        />
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={!newComment.trim() || commentLoading}
+            className="px-6 py-3 bg-green-900 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-400 font-medium transition-colors flex items-center space-x-2"
+          >
+            <FaComment className="w-5 h-5" />
+            <span>{commentLoading ? "Posting..." : "Post Review"}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    {/* Reviews List */}
+    <div className="space-y-6">
+      {comments.length === 0 ? (
+        <div className="text-center py-8">
+          <FaComment className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-600">No reviews yet. Be the first to share your experience!</p>
+        </div>
+      ) : (
+        comments.map((comment) => {
+          // Get user info - prioritize stored data
+          const userName = comment.user_display_name || 
+                         comment.profiles?.name || 
+                         'Anonymous';
+          
+          const userAvatar = comment.user_avatar_url || 
+                           comment.profiles?.avatar_url;
+          
+          const isCurrentUser = comment.is_current_user;
+          
+          console.log(`📋 Rendering comment ${comment.id}:`, {
+            userName,
+            userAvatar,
+            storedName: comment.user_display_name,
+            userId: comment.user_id
+          });
+
+          return (
+            <div key={comment.id} className="border-b border-gray-200 pb-6 last:border-0">
+              <div className="flex items-start space-x-3 mb-3">
+                <div className="flex-shrink-0">
+                  {userAvatar ? (
+                    <img
+                      src={userAvatar}
+                      alt={userName}
+                      className="w-10 h-10 rounded-full object-cover"
+                      onError={(e) => {
+                        // If image fails to load, show fallback
+                        e.target.style.display = 'none';
+                        const parent = e.target.parentElement;
+                        parent.innerHTML = `
+                          <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-900" fill="currentColor" viewBox="0 0 20 20">
+                              <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                            </svg>
                           </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                        `;
+                      }}
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                      <FaUser className="w-5 h-5 text-green-900" />
+                    </div>
+                  )}
                 </div>
-              )}
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <h4 className="font-semibold text-gray-900">
+                        {userName}
+                      </h4>
+                      {isCurrentUser && (
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                          You
+                        </span>
+                      )}
+                      {comment.user_email && !isCurrentUser && (
+                        <span className="text-xs text-gray-500">
+                          ({comment.user_email})
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sm text-gray-500">
+                      {new Date(comment.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-1 mb-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <FaStar
+                        key={star}
+                        className={`w-4 h-4 ${
+                          star <= comment.rating ? "text-yellow-400" : "text-gray-300"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-gray-700 whitespace-pre-line">{comment.content}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  </div>
+)}
             </div>
 
             {userHasApplied && (
