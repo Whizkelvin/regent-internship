@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { 
   FaBriefcase, 
   FaClipboardCheck, 
-  FaUsers, 
+  FaUser, 
   FaChartLine,
   FaBuilding,
   FaCalendarAlt,
@@ -19,7 +19,6 @@ import {
   FaSync,
   FaCheckCircle,
   FaTimesCircle,
-  FaClock as FaClockIcon,
   FaFilter,
   FaDownload,
   FaFileAlt,
@@ -29,7 +28,15 @@ import {
   FaPaperPlane,
   FaStar,
   FaRegStar,
-  FaTimes
+  FaTimes,
+  FaInbox,
+  FaBell,
+  FaReply,
+  FaCheckDouble,
+  FaRegCheckCircle,
+  FaUserCircle,
+  FaArrowLeft,
+  FaShieldAlt
 } from 'react-icons/fa';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -45,7 +52,6 @@ const ESSOfficerDashboard = () => {
   const [jobSearchTerm, setJobSearchTerm] = useState('');
   const [showCreateJobModal, setShowCreateJobModal] = useState(false);
   const [showEditJobModal, setShowEditJobModal] = useState(false);
-  const [selectedJob, setSelectedJob] = useState(null);
   const [jobToDelete, setJobToDelete] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   
@@ -58,6 +64,23 @@ const ESSOfficerDashboard = () => {
   const [showApplicationDetails, setShowApplicationDetails] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   
+  // Messages state
+  const [messages, setMessages] = useState([]);
+  const [filteredMessages, setFilteredMessages] = useState([]);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  const [messageSearchTerm, setMessageSearchTerm] = useState('');
+  const [messageFilter, setMessageFilter] = useState('all');
+  const [showMessageDetails, setShowMessageDetails] = useState(false);
+  const [messageDetails, setMessageDetails] = useState(null);
+  const [showMobileConversation, setShowMobileConversation] = useState(false);
+  const [senderProfiles, setSenderProfiles] = useState({});
+  const [adminUserId, setAdminUserId] = useState(null);
+  
+  const messagesEndRef = useRef(null);
+  const replyInputRef = useRef(null);
+  
   // Stats
   const [stats, setStats] = useState({
     totalJobs: 0,
@@ -66,7 +89,9 @@ const ESSOfficerDashboard = () => {
     pendingApplications: 0,
     reviewedApplications: 0,
     shortlistedApplications: 0,
-    hiredApplications: 0
+    hiredApplications: 0,
+    totalMessages: 0,
+    unreadMessages: 0
   });
   
   // New Job Form State
@@ -116,6 +141,22 @@ const ESSOfficerDashboard = () => {
     filterApplications();
   }, [applicationSearchTerm, statusFilter, applications]);
 
+  useEffect(() => {
+    filterMessages();
+  }, [messageSearchTerm, messageFilter, messages]);
+
+  useEffect(() => {
+    if (selectedMessage && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [selectedMessage]);
+
+  useEffect(() => {
+    if (selectedMessage && replyInputRef.current) {
+      replyInputRef.current.focus();
+    }
+  }, [selectedMessage]);
+
   const checkUserAndFetchData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -124,6 +165,9 @@ const ESSOfficerDashboard = () => {
         navigate('/login');
         return;
       }
+      
+      // Get current admin/ESS user ID
+      setAdminUserId(user.id);
       
       // Check if user has ESS Officer role
       const { data: profile } = await supabase
@@ -140,6 +184,8 @@ const ESSOfficerDashboard = () => {
       setUser(user);
       await fetchJobs();
       await fetchApplications();
+      await fetchMessages();
+      await fetchSenderProfiles();
     } catch (error) {
       console.error('Error checking user:', error);
       navigate('/login');
@@ -160,7 +206,6 @@ const ESSOfficerDashboard = () => {
       setJobs(data || []);
       setFilteredJobs(data || []);
       
-      // Update stats
       setStats(prev => ({
         ...prev,
         totalJobs: data?.length || 0,
@@ -179,7 +224,7 @@ const ESSOfficerDashboard = () => {
         .select(`
           *,
           jobs:job_id (*),
-          profiles:user_id (id, full_name, email, avatar_url)
+          profiles:user_id (id, full_name, email, avatar_url, phone)
         `)
         .order('created_at', { ascending: false });
       
@@ -188,7 +233,6 @@ const ESSOfficerDashboard = () => {
       setApplications(data || []);
       setFilteredApplications(data || []);
       
-      // Update stats
       const pending = data?.filter(app => app.status === 'pending').length || 0;
       const reviewed = data?.filter(app => app.status === 'reviewed').length || 0;
       const shortlisted = data?.filter(app => app.status === 'shortlisted').length || 0;
@@ -205,6 +249,59 @@ const ESSOfficerDashboard = () => {
     } catch (error) {
       console.error('Error fetching applications:', error);
       alert('Error fetching applications: ' + error.message);
+    }
+  };
+
+  const fetchMessages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('application_messages')
+        .select(`
+          *,
+          sender:sender_id (id, email, full_name),
+          receiver:receiver_id (id, email, full_name)
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      const enhancedMessages = (data || []).map(msg => ({
+        ...msg,
+        is_from_admin: msg.sender_id === adminUserId,
+        sender_name: msg.sender?.full_name || (msg.sender_id === adminUserId ? 'You (ESS)' : 'Applicant'),
+        receiver_name: msg.receiver?.full_name || 'User'
+      }));
+      
+      setMessages(enhancedMessages);
+      setFilteredMessages(enhancedMessages);
+      
+      const unreadCount = enhancedMessages.filter(msg => !msg.is_read && msg.receiver_id === adminUserId).length;
+      
+      setStats(prev => ({
+        ...prev,
+        totalMessages: enhancedMessages.length,
+        unreadMessages: unreadCount
+      }));
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  };
+
+  const fetchSenderProfiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, avatar_url, phone, role');
+      
+      if (!error && data) {
+        const profilesMap = {};
+        data.forEach(profile => {
+          profilesMap[profile.id] = profile;
+        });
+        setSenderProfiles(profilesMap);
+      }
+    } catch (error) {
+      console.error('Error fetching sender profiles:', error);
     }
   };
 
@@ -240,6 +337,37 @@ const ESSOfficerDashboard = () => {
     }
     
     setFilteredApplications(filtered);
+  };
+
+  const filterMessages = () => {
+    let filtered = [...messages];
+    
+    if (messageSearchTerm) {
+      filtered = filtered.filter(msg =>
+        msg.sender_name?.toLowerCase().includes(messageSearchTerm.toLowerCase()) ||
+        msg.message?.toLowerCase().includes(messageSearchTerm.toLowerCase()) ||
+        msg.email?.toLowerCase().includes(messageSearchTerm.toLowerCase())
+      );
+    }
+    
+    switch (messageFilter) {
+      case 'unread':
+        filtered = filtered.filter(msg => !msg.is_read && msg.receiver_id === adminUserId);
+        break;
+      case 'read':
+        filtered = filtered.filter(msg => msg.is_read);
+        break;
+      case 'from_applicants':
+        filtered = filtered.filter(msg => msg.sender_id !== adminUserId);
+        break;
+      case 'from_admin':
+        filtered = filtered.filter(msg => msg.sender_id === adminUserId);
+        break;
+      default:
+        break;
+    }
+    
+    setFilteredMessages(filtered);
   };
 
   const handleCreateJob = async (e) => {
@@ -323,7 +451,8 @@ const ESSOfficerDashboard = () => {
       alert('Error deleting job: ' + error.message);
     }
   };
- const handleSignOut = async () => {
+
+  const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate('/');
   };
@@ -342,7 +471,6 @@ const ESSOfficerDashboard = () => {
       
       if (error) throw error;
       
-      // Add status history
       await supabase
         .from('application_status_history')
         .insert([{
@@ -360,6 +488,123 @@ const ESSOfficerDashboard = () => {
     } finally {
       setUpdatingStatus(false);
     }
+  };
+
+  const handleMarkMessageAsRead = async (messageId) => {
+    try {
+      const { error } = await supabase
+        .from('application_messages')
+        .update({ is_read: true })
+        .eq('id', messageId);
+      
+      if (error) throw error;
+      
+      setMessages(prev => prev.map(msg => 
+        msg.id === messageId ? { ...msg, is_read: true } : msg
+      ));
+      
+      if (selectedMessage?.id === messageId) {
+        setSelectedMessage(prev => ({ ...prev, is_read: true }));
+      }
+    } catch (error) {
+      console.error('Error marking message as read:', error);
+    }
+  };
+
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !selectedMessage || sendingReply) return;
+
+    setSendingReply(true);
+    
+    try {
+      let receiverId = selectedMessage.sender_id;
+      let applicationId = selectedMessage.application_id;
+      
+      // If no application_id, find related application
+      if (!applicationId && selectedMessage.email) {
+        const { data: application } = await supabase
+          .from('applications')
+          .select('id')
+          .eq('email', selectedMessage.email)
+          .limit(1)
+          .single();
+        applicationId = application?.id;
+      }
+      
+      const { data: newMessage, error } = await supabase
+        .from('application_messages')
+        .insert([{
+          application_id: applicationId,
+          sender_id: adminUserId,
+          receiver_id: receiverId,
+          message: replyText.trim(),
+          subject: `Re: ${selectedMessage.subject || 'Your Message'}`,
+          is_read: false,
+          created_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const enhancedMessage = {
+        ...newMessage,
+        is_from_admin: true,
+        sender_name: 'You (ESS)',
+        receiver_name: selectedMessage.sender_name
+      };
+      
+      setMessages(prev => [enhancedMessage, ...prev]);
+      setReplyText('');
+      
+      if (selectedMessage) {
+        setSelectedMessage(prev => ({
+          ...prev,
+          messages: [...(prev.messages || []), enhancedMessage]
+        }));
+      }
+      
+      await fetchMessages();
+      
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      alert('Failed to send reply: ' + error.message);
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!window.confirm('Are you sure you want to delete this message?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('application_messages')
+        .delete()
+        .eq('id', messageId);
+      
+      if (error) throw error;
+      
+      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+      if (selectedMessage?.id === messageId) {
+        setSelectedMessage(null);
+        setShowMobileConversation(false);
+      }
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      alert('Failed to delete message');
+    }
+  };
+
+  const getConversationHistory = (message) => {
+    if (!message) return [];
+    
+    return messages.filter(msg => 
+      msg.sender_id === message.sender_id ||
+      msg.receiver_id === message.sender_id ||
+      msg.application_id === message.application_id ||
+      msg.email === message.email
+    ).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   };
 
   const handleImageUpload = async (file, type, isEdit = false) => {
@@ -422,6 +667,22 @@ const ESSOfficerDashboard = () => {
     return colors[jobType] || 'bg-gray-100 text-gray-800';
   };
 
+  const formatMessageTime = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return format(date, 'h:mm a');
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return format(date, 'EEE');
+    } else {
+      return format(date, 'MMM d');
+    }
+  };
+
   const StatsCards = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
@@ -466,21 +727,271 @@ const ESSOfficerDashboard = () => {
       <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-600 mb-1">Hired</p>
-            <p className="text-3xl font-bold text-gray-900">{stats.hiredApplications}</p>
-            <p className="text-xs text-green-600 mt-1">Successfully placed</p>
+            <p className="text-sm text-gray-600 mb-1">Unread Messages</p>
+            <p className="text-3xl font-bold text-red-600">{stats.unreadMessages}</p>
+            <p className="text-xs text-gray-600 mt-1">Total: {stats.totalMessages}</p>
           </div>
-          <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-            <FaCheckCircle className="w-6 h-6 text-emerald-900" />
+          <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+            <FaInbox className="w-6 h-6 text-red-900" />
           </div>
         </div>
       </div>
     </div>
   );
 
+  // Conversation List Component
+  const ConversationList = () => (
+    <div className={`${showMobileConversation ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-1/3 border-r border-gray-200 bg-white`}>
+      <div className="p-4 border-b border-gray-200">
+        <div className="relative mb-3">
+          <FaSearch className="absolute left-3 top-3 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search messages..."
+            value={messageSearchTerm}
+            onChange={(e) => setMessageSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {['all', 'unread', 'from_applicants', 'from_admin'].map((type) => (
+            <button
+              key={type}
+              onClick={() => setMessageFilter(type)}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                messageFilter === type 
+                  ? 'bg-green-900 text-white' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {type === 'all' && 'All'}
+              {type === 'unread' && `Unread (${messages.filter(m => !m.is_read && m.receiver_id === adminUserId).length})`}
+              {type === 'from_applicants' && 'From Applicants'}
+              {type === 'from_admin' && 'From Me'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {filteredMessages.length === 0 ? (
+          <div className="p-8 text-center">
+            <FaInbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">No messages found</p>
+          </div>
+        ) : (
+          filteredMessages.map((msg) => {
+            const isUnread = !msg.is_read && msg.receiver_id === adminUserId;
+            const senderName = msg.sender_name || (msg.sender_id === adminUserId ? 'You' : 'Applicant');
+            
+            return (
+              <div
+                key={msg.id}
+                onClick={() => {
+                  setSelectedMessage(msg);
+                  setShowMobileConversation(true);
+                  if (isUnread) handleMarkMessageAsRead(msg.id);
+                }}
+                className={`p-4 border-b border-gray-100 cursor-pointer transition-all hover:bg-gray-50 ${
+                  selectedMessage?.id === msg.id ? 'bg-green-50 border-l-4 border-l-green-900' : ''
+                } ${isUnread ? 'bg-blue-50' : ''}`}
+              >
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      msg.sender_id === adminUserId ? 'bg-green-100' : 'bg-purple-100'
+                    }`}>
+                      {msg.sender_id === adminUserId ? 
+                        <FaShieldAlt className="w-5 h-5 text-green-900" /> : 
+                        ""
+                      }
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className={`font-medium truncate ${isUnread ? 'text-gray-900 font-semibold' : 'text-gray-700'}`}>
+                        {senderName}
+                        {msg.sender_id === adminUserId && <span className="ml-2 text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">ESS</span>}
+                      </h3>
+                      <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
+                        {formatMessageTime(msg.created_at)}
+                      </span>
+                    </div>
+                    <p className={`text-sm truncate ${isUnread ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                      {msg.message?.substring(0, 60)}...
+                    </p>
+                  </div>
+                  {isUnread && (
+                    <div className="w-2 h-2 bg-green-900 rounded-full flex-shrink-0 mt-2"></div>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+
+  // Conversation Detail Component
+  const ConversationDetail = () => {
+    const conversationHistory = getConversationHistory(selectedMessage);
+    
+    if (!selectedMessage) {
+      return (
+        <div className="hidden md:flex flex-1 flex-col items-center justify-center bg-gray-50">
+          <FaInbox className="w-16 h-16 text-gray-300 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Select a message</h3>
+          <p className="text-gray-500 text-center max-w-md">
+            Choose a conversation from the list to view messages and reply to applicants
+          </p>
+        </div>
+      );
+    }
+
+    const senderName = selectedMessage.sender_name || (selectedMessage.sender_id === adminUserId ? 'You' : 'Applicant');
+
+    return (
+      <div className="flex flex-col flex-1 bg-gray-50">
+        <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowMobileConversation(false)}
+                className="md:hidden text-gray-600 hover:text-gray-900"
+              >
+                <FaArrowLeft className="w-5 h-5" />
+              </button>
+              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 flex items-center justify-center">
+                {selectedMessage.sender_id === adminUserId ? 
+                  <FaShieldAlt className="w-5 h-5 text-green-900" /> : 
+                  <FaUser className="w-5 h-5 text-purple-900" />
+                }
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">{senderName}</h3>
+                <p className="text-xs text-gray-500">
+                  {selectedMessage.email || (selectedMessage.sender_id === adminUserId ? 'ESS Officer' : 'Applicant')}
+                </p>
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              {selectedMessage.application_id && (
+                <button
+                  onClick={() => {
+                    const app = applications.find(a => a.id === selectedMessage.application_id);
+                    if (app) {
+                      setSelectedApplication(app);
+                      setShowApplicationDetails(true);
+                    }
+                  }}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="View Application"
+                >
+                  <FaBriefcase className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={() => handleDeleteMessage(selectedMessage.id)}
+                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Delete Message"
+              >
+                <FaTrash className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {conversationHistory.length === 0 ? (
+            <div className="text-center py-8">
+              <FaEnvelope className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No conversation history</p>
+            </div>
+          ) : (
+            conversationHistory.map((msg) => {
+              const isMyMessage = msg.sender_id === adminUserId;
+              const msgSenderName = msg.sender_name || (isMyMessage ? 'You (ESS)' : 'Applicant');
+              
+              return (
+                <div key={msg.id} className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xs lg:max-w-md ${isMyMessage ? 'order-2' : 'order-1'}`}>
+                    <div className={`px-4 py-2 rounded-2xl ${
+                      isMyMessage 
+                        ? 'bg-green-900 text-white rounded-br-none' 
+                        : 'bg-white text-gray-900 border border-gray-200 rounded-bl-none shadow-sm'
+                    }`}>
+                      {!isMyMessage && (
+                        <p className="text-xs font-medium text-gray-500 mb-1">{msgSenderName}</p>
+                      )}
+                      <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                      {msg.subject && (
+                        <p className="text-xs opacity-75 mt-1">Subject: {msg.subject}</p>
+                      )}
+                      <div className={`flex items-center justify-end space-x-1 mt-1 text-xs ${
+                        isMyMessage ? 'text-green-200' : 'text-gray-400'
+                      }`}>
+                        <span>{format(new Date(msg.created_at), 'h:mm a')}</span>
+                        {isMyMessage && (
+                          msg.is_read ? <FaCheckDouble className="w-3 h-3" /> : <FaRegCheckCircle className="w-3 h-3" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="bg-white border-t border-gray-200 p-4">
+          <div className="flex items-end space-x-3">
+            <div className="flex-1">
+              <textarea
+                ref={replyInputRef}
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder={`Reply to ${senderName}...`}
+                rows="2"
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendReply();
+                  }
+                }}
+              />
+              <p className="text-xs text-gray-400 mt-1">Press Enter to send, Shift+Enter for new line</p>
+            </div>
+            <button
+              onClick={handleSendReply}
+              disabled={!replyText.trim() || sendingReply}
+              className="px-4 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {sendingReply ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <FaPaperPlane className="w-5 h-5" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const MessagesTab = () => (
+    <div className="h-[calc(100vh-350px)] min-h-[500px] bg-white rounded-xl shadow-lg overflow-hidden">
+      <div className="flex h-full">
+        <ConversationList />
+        <ConversationDetail />
+      </div>
+    </div>
+  );
+
   const JobsTab = () => (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Manage Jobs</h2>
@@ -514,7 +1025,6 @@ const ESSOfficerDashboard = () => {
         </div>
       </div>
       
-      {/* Jobs Grid */}
       {filteredJobs.length === 0 ? (
         <div className="bg-white rounded-xl p-12 text-center">
           <FaBriefcase className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -589,7 +1099,6 @@ const ESSOfficerDashboard = () => {
 
   const ApplicationsTab = () => (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Manage Applications</h2>
@@ -630,7 +1139,6 @@ const ESSOfficerDashboard = () => {
         </div>
       </div>
       
-      {/* Applications Table */}
       {filteredApplications.length === 0 ? (
         <div className="bg-white rounded-xl p-12 text-center">
           <FaClipboardCheck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -685,16 +1193,34 @@ const ESSOfficerDashboard = () => {
                       </select>
                     </td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => {
-                          setSelectedApplication(app);
-                          setShowApplicationDetails(true);
-                        }}
-                        className="text-green-900 hover:text-green-700 font-medium text-sm flex items-center space-x-1"
-                      >
-                        <FaEye className="w-4 h-4" />
-                        <span>View Details</span>
-                      </button>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedApplication(app);
+                            setShowApplicationDetails(true);
+                          }}
+                          className="text-green-900 hover:text-green-700 font-medium text-sm flex items-center space-x-1"
+                        >
+                          <FaEye className="w-4 h-4" />
+                          <span>View</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Find message for this application
+                            const msg = messages.find(m => m.application_id === app.id);
+                            if (msg) {
+                              setSelectedMessage(msg);
+                              setActiveTab('messages');
+                            } else {
+                              alert('No conversation started for this application yet');
+                            }
+                          }}
+                          className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center space-x-1"
+                        >
+                          <FaEnvelope className="w-4 h-4" />
+                          <span>Message</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -706,7 +1232,7 @@ const ESSOfficerDashboard = () => {
     </div>
   );
 
-  // Modals
+  // Modals (CreateJobModal, EditJobModal, DeleteConfirmModal, ApplicationDetailsModal)
   const CreateJobModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -887,7 +1413,7 @@ const ESSOfficerDashboard = () => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Phone</p>
-                    <p className="font-medium text-gray-900">{selectedApplication.phone || 'N/A'}</p>
+                    <p className="font-medium text-gray-900">{selectedApplication.phone || selectedApplication.profiles?.phone || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Applied Date</p>
@@ -950,11 +1476,18 @@ const ESSOfficerDashboard = () => {
                 <button
                   onClick={() => {
                     setShowApplicationDetails(false);
-                    // Open message modal here if needed
+                    const msg = messages.find(m => m.application_id === selectedApplication.id);
+                    if (msg) {
+                      setSelectedMessage(msg);
+                      setActiveTab('messages');
+                    } else {
+                      alert('Start a conversation by sending a message');
+                    }
                   }}
-                  className="px-6 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800"
+                  className="px-6 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800 flex items-center space-x-2"
                 >
-                  Send Message
+                  <FaEnvelope className="w-4 h-4" />
+                  <span>Send Message</span>
                 </button>
               </div>
             </div>
@@ -1002,7 +1535,7 @@ const ESSOfficerDashboard = () => {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold">ESS Officer Dashboard</h1>
-              <p className="text-green-200 mt-1">Manage jobs and applications</p>
+              <p className="text-green-200 mt-1">Manage jobs, applications, and messages</p>
             </div>
             <button
               onClick={handleSignOut}
@@ -1021,10 +1554,10 @@ const ESSOfficerDashboard = () => {
         {/* Tab Navigation */}
         <div className="bg-white rounded-xl shadow-lg mb-6">
           <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6">
+            <nav className="flex space-x-8 px-6 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('jobs')}
-                className={`py-4 px-1 font-medium text-sm border-b-2 transition-colors ${
+                className={`py-4 px-1 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === 'jobs'
                     ? 'border-green-900 text-green-900'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -1035,7 +1568,7 @@ const ESSOfficerDashboard = () => {
               </button>
               <button
                 onClick={() => setActiveTab('applications')}
-                className={`py-4 px-1 font-medium text-sm border-b-2 transition-colors ${
+                className={`py-4 px-1 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === 'applications'
                     ? 'border-green-900 text-green-900'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -1044,12 +1577,29 @@ const ESSOfficerDashboard = () => {
                 <FaClipboardCheck className="inline mr-2" />
                 Manage Applications
               </button>
+              <button
+                onClick={() => setActiveTab('messages')}
+                className={`py-4 px-1 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  activeTab === 'messages'
+                    ? 'border-green-900 text-green-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FaEnvelope className="inline mr-2" />
+                Messages
+                {stats.unreadMessages > 0 && (
+                  <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                    {stats.unreadMessages}
+                  </span>
+                )}
+              </button>
             </nav>
           </div>
           
           <div className="p-6">
             {activeTab === 'jobs' && <JobsTab />}
             {activeTab === 'applications' && <ApplicationsTab />}
+            {activeTab === 'messages' && <MessagesTab />}
           </div>
         </div>
       </div>
@@ -1058,7 +1608,6 @@ const ESSOfficerDashboard = () => {
       {showCreateJobModal && <CreateJobModal />}
       {showEditJobModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          {/* Similar to CreateJobModal but with editJob state */}
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
@@ -1068,7 +1617,6 @@ const ESSOfficerDashboard = () => {
                 </button>
               </div>
               <form onSubmit={handleUpdateJob} className="space-y-4">
-                {/* Similar form fields as CreateJobModal with editJob values */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Job Title *</label>

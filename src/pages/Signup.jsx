@@ -108,7 +108,7 @@ const Signup = () => {
   // Validate student ID
   const validateStudentId = (value) => {
     if (!value) return "Student ID is required";
-    if (value.length < 5) {
+    if (value.length <8 ) {
       return "Student ID must be at least 5 characters";
     }
     return "";
