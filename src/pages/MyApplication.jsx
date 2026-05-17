@@ -22,20 +22,27 @@ import {
   FaBell,
   FaEllipsisV,
   FaPaperPlane,
-  
-  FaDownload
+  FaDownload,
+  FaUpload,
+  FaTrash,
+  FaFilePdf,
+  FaFileWord,
+  FaHome
 } from 'react-icons/fa';
+import Header from '../components/Header';
 
 const MyApplications = () => {
   const navigate = useNavigate();
   const [applications, setApplications] = useState([]);
-   const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [filteredApplications, setFilteredApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [user, setUser] = useState(null);
+  const [cvInfo, setCvInfo] = useState(null);
+  const [uploadingCV, setUploadingCV] = useState(false);
   const [stats, setStats] = useState({ 
     total: 0, 
     active: 0, 
@@ -46,6 +53,7 @@ const MyApplications = () => {
 
   useEffect(() => {
     fetchUserApplications();
+    fetchCVInfo();
   }, []);
 
   useEffect(() => {
@@ -84,6 +92,188 @@ const MyApplications = () => {
       console.error('Error fetching applications:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCVInfo = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('user_cvs')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      setCvInfo(data);
+    } catch (error) {
+      console.error('Error fetching CV info:', error);
+    }
+  };
+
+const handleCVUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  // Validate file type
+  const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  if (!validTypes.includes(file.type)) {
+    alert('Please upload a PDF or Word document');
+    return;
+  }
+
+  // Validate file size (max 5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    alert('File size must be less than 5MB');
+    return;
+  }
+
+  setUploadingCV(true);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not found');
+
+    // Generate unique file name
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}/${Date.now()}_cv.${fileExt}`;
+
+    console.log('Uploading file:', fileName); // Debug log
+
+    // Upload file to storage
+    const { error: uploadError } = await supabase.storage
+      .from('user_cvs')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError);
+      throw new Error(`Storage upload failed: ${uploadError.message}`);
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('user_cvs')
+      .getPublicUrl(fileName);
+
+    // Prepare CV data for database
+    const cvData = {
+      user_id: user.id,
+      cv_url: publicUrl,
+      cv_name: file.name,
+      cv_type: file.type,
+      cv_size: file.size,
+      uploaded_at: new Date().toISOString()
+    };
+
+    if (cvInfo) {
+      // Delete old file from storage
+      const oldFileName = cvInfo.cv_url.split('/').pop();
+      const oldPath = `${user.id}/${oldFileName}`;
+      const { error: deleteError } = await supabase.storage
+        .from('user_cvs')
+        .remove([oldPath]);
+      
+      if (deleteError) {
+        console.warn('Could not delete old CV:', deleteError);
+      }
+
+      // Update database
+      const { error: updateError } = await supabase
+        .from('user_cvs')
+        .update(cvData)
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+    } else {
+      // Insert new record
+      const { error: insertError } = await supabase
+        .from('user_cvs')
+        .insert([cvData]);
+
+      if (insertError) throw insertError;
+    }
+
+    await fetchCVInfo();
+    alert('CV uploaded successfully!');
+  } catch (error) {
+    console.error('Error uploading CV:', error);
+    alert(`Failed to upload CV: ${error.message}`);
+  } finally {
+    setUploadingCV(false);
+    event.target.value = '';
+  }
+};
+
+  const downloadCV = async (cvUrl) => {
+    try {
+      const response = await fetch(cvUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = cvInfo?.cv_name || 'resume';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading CV:', error);
+      alert('Failed to download CV');
+    }
+  };
+
+  const deleteCV = async () => {
+    if (!window.confirm('Are you sure you want to delete your CV?')) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not found');
+
+      // Delete file from storage
+      const fileName = cvInfo.cv_url.split('/').pop();
+      const filePath = `${user.id}/${fileName}`;
+      await supabase.storage.from('user_cvs').remove([filePath]);
+
+      // Delete from database
+      const { error } = await supabase
+        .from('user_cvs')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setCvInfo(null);
+      alert('CV deleted successfully');
+    } catch (error) {
+      console.error('Error deleting CV:', error);
+      alert('Failed to delete CV');
+    }
+  };
+
+  const downloadApplicationCV = async (application) => {
+    if (!application.cv_url) {
+      alert('No CV attached to this application');
+      return;
+    }
+    
+    try {
+      const response = await fetch(application.cv_url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `cv_${application.jobs?.title || 'application'}_${application.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading CV:', error);
+      alert('Failed to download CV');
     }
   };
 
@@ -175,14 +365,14 @@ const MyApplications = () => {
         color: 'text-green-600',
         bgColor: 'bg-green-50',
         borderColor: 'border-green-200',
-        gradient: 'from-green-500 to-emerald-600',
+        gradient: 'from-green-500 to-green-950',
         label: 'Accepted'
       },
       rejected: {
-        color: 'text-rose-600',
-        bgColor: 'bg-rose-50',
-        borderColor: 'border-rose-200',
-        gradient: 'from-rose-500 to-red-600',
+        color: 'text-red-600',
+        bgColor: 'bg-red-50',
+        borderColor: 'border-red-200',
+        gradient: 'from-red-500 to-red-950',
         label: 'Not Selected'
       },
       withdrawn: {
@@ -225,7 +415,9 @@ const MyApplications = () => {
 
     return (
       <div className="bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors duration-200">
+        
         <div className="p-6">
+          
           {/* Header */}
           <div className="flex justify-between items-start mb-4">
             <div className="flex-1">
@@ -300,9 +492,13 @@ const MyApplications = () => {
               >
                 View Details
               </button>
-              {application.cover_letter && (
-                <button className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors">
-           
+              {application.cv_url && (
+                <button
+                  onClick={() => downloadApplicationCV(application)}
+                  className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors inline-flex items-center"
+                >
+                  <FaDownload className="w-3.5 h-3.5 mr-1" />
+                  CV
                 </button>
               )}
             </div>
@@ -384,7 +580,7 @@ const MyApplications = () => {
         </div>
         <div className="mt-3 h-1 bg-gray-100 rounded-full">
           <div 
-            className="h-full bg-green-500 rounded-full" 
+            className="h-full bg-gradient-to-r from-green-500 to-green-950 rounded-full" 
             style={{ width: `${stats.successRate}%` }}
           />
         </div>
@@ -393,52 +589,49 @@ const MyApplications = () => {
   );
 
   const exportToCSV = () => {
-  setExporting(true);
-  
-  try {
-    // Prepare data for export
-    const exportData = filteredApplications.map(app => ({
-      'Job Title': app.jobs?.title || 'N/A',
-      'Company': app.jobs?.company || 'N/A',
-      'Location': app.jobs?.location || 'N/A',
-      'Salary': app.jobs?.salary || 'N/A',
-      'Status': app.status.charAt(0).toUpperCase() + app.status.slice(1),
-      'Applied Date': formatDate(app.created_at),
-      'Last Updated': formatDate(app.updated_at || app.created_at),
-      'Cover Letter': app.cover_letter || 'N/A'
-    }));
+    setExporting(true);
+    
+    try {
+      const exportData = filteredApplications.map(app => ({
+        'Job Title': app.jobs?.title || 'N/A',
+        'Company': app.jobs?.company || 'N/A',
+        'Location': app.jobs?.location || 'N/A',
+        'Salary': app.jobs?.salary || 'N/A',
+        'Status': app.status.charAt(0).toUpperCase() + app.status.slice(1),
+        'Applied Date': formatDate(app.created_at),
+        'Last Updated': formatDate(app.updated_at || app.created_at),
+        'Cover Letter': app.cover_letter || 'N/A'
+      }));
 
-    // Create CSV content
-    const headers = Object.keys(exportData[0] || {});
-    const csvContent = [
-      headers.join(','),
-      ...exportData.map(row => 
-        headers.map(header => 
-          `"${String(row[header] || '').replace(/"/g, '""')}"`
-        ).join(',')
-      )
-    ].join('\n');
+      const headers = Object.keys(exportData[0] || {});
+      const csvContent = [
+        headers.join(','),
+        ...exportData.map(row => 
+          headers.map(header => 
+            `"${String(row[header] || '').replace(/"/g, '""')}"`
+          ).join(',')
+        )
+      ].join('\n');
 
-    // Create and trigger download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `applications_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-  } catch (error) {
-    console.error('Export failed:', error);
-    alert('Failed to export applications. Please try again.');
-  } finally {
-    setExporting(false);
-  }
-};
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `applications_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export applications. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -470,22 +663,114 @@ const MyApplications = () => {
                 onClick={fetchUserApplications}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50"
               >
-               
                 Refresh
               </button>
               <button
                 onClick={() => navigate('/jobs')}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+                className="inline-flex items-center px-4 py-2 bg-green-950 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
               >
                 <FaExternalLinkAlt className="w-4 h-4 mr-2" />
                 Find Jobs
               </button>
+              <button
+                        onClick={() => navigate("/home")}
+                        className="bg-gradient-to-r from-green-950 to-green-800 hover:from-green-800 hover:to-green-700 text-white px-6 py-2 rounded-xl font-semibold transition-all duration-300 hover:scale-105 flex items-center space-x-2"
+                    >
+                        <FaHome className="w-4 h-4" />
+                        <span>Back to Home</span>
+                    </button>
             </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* CV Management Section */}
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 p-6 mb-8">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center mb-3">
+                <div className="p-2 bg-green-100 rounded-lg mr-3">
+                  <FaFileAlt className="w-5 h-5 text-green-700" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-green-900">My Resume/CV</h2>
+                  <p className="text-sm text-green-700 mt-0.5">
+                    Upload and manage your resume. Your CV will be attached to future applications.
+                  </p>
+                </div>
+              </div>
+              
+              {cvInfo ? (
+                <div className="mt-4 p-4 bg-white rounded-lg border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        {cvInfo.cv_type === 'application/pdf' ? (
+                          <FaFilePdf className="w-5 h-5 text-red-600" />
+                        ) : (
+                          <FaFileWord className="w-5 h-5 text-blue-600" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{cvInfo.cv_name}</p>
+                        <p className="text-xs text-gray-500">
+                          Uploaded {formatDate(cvInfo.uploaded_at)} • 
+                          {(cvInfo.cv_size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => downloadCV(cvInfo.cv_url)}
+                        className="px-3 py-1.5 text-sm font-medium text-green-700 hover:text-green-800 hover:bg-green-50 rounded-md transition-colors inline-flex items-center"
+                      >
+                        <FaDownload className="w-3.5 h-3.5 mr-1" />
+                        Download
+                      </button>
+                      <label className="px-3 py-1.5 text-sm font-medium text-blue-700 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors cursor-pointer inline-flex items-center">
+                        <FaUpload className="w-3.5 h-3.5 mr-1" />
+                        Update
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx"
+                          onChange={handleCVUpload}
+                          className="hidden"
+                          disabled={uploadingCV}
+                        />
+                      </label>
+                      <button
+                        onClick={deleteCV}
+                        className="px-3 py-1.5 text-sm font-medium text-red-700 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors inline-flex items-center"
+                      >
+                        <FaTrash className="w-3.5 h-3.5 mr-1" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <label className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 cursor-pointer">
+                    <FaUpload className="w-4 h-4 mr-2" />
+                    {uploadingCV ? 'Uploading...' : 'Upload Resume/CV'}
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleCVUpload}
+                      className="hidden"
+                      disabled={uploadingCV}
+                    />
+                  </label>
+                  <p className="text-xs text-green-600 mt-2">
+                    Supported formats: PDF, DOC, DOCX (Max 5MB)
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Stats */}
         <StatsCard />
 
@@ -539,13 +824,12 @@ const MyApplications = () => {
               >
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
-                <option value="job-title">Job Title</option>
+                <option value="Internship-title">Job Title</option>
                 <option value="company">Company</option>
               </select>
             </div>
           </div>
 
-          {/* Active filters */}
           {(searchTerm || statusFilter !== 'all') && (
             <div className="mt-4 pt-4 border-t border-gray-200">
               <div className="flex items-center justify-between">
@@ -620,41 +904,41 @@ const MyApplications = () => {
         </div>
 
         {/* Export Section */}
-       <div className="mt-8 bg-white rounded-lg border border-gray-200 p-6">
-  <div className="flex items-center justify-between">
-    <div>
-      <h3 className="text-lg font-medium text-gray-900">Export Applications</h3>
-      <p className="text-gray-600 mt-1">Download your application history as a CSV file</p>
-    </div>
-    <button 
-      onClick={exportToCSV}
-      disabled={exporting || filteredApplications.length === 0}
-      className={`inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg ${
-        exporting || filteredApplications.length === 0
-          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-          : 'text-gray-700 bg-white hover:bg-gray-50'
-      }`}
-    >
-      {exporting ? (
-        <>
-          <div className="w-4 h-4 mr-2 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
-          Exporting...
-        </>
-      ) : (
-        <>
-          <FaDownload className="w-4 h-4 mr-2" />
-          Export CSV ({filteredApplications.length})
-        </>
-      )}
-    </button>
-  </div>
-  
-  {filteredApplications.length === 0 && (
-    <p className="text-sm text-gray-500 mt-3">
-      No applications available for export. Apply to some jobs first!
-    </p>
-  )}
-</div>
+        <div className="mt-8 bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">Export Applications</h3>
+              <p className="text-gray-600 mt-1">Download your application history as a CSV file</p>
+            </div>
+            <button 
+              onClick={exportToCSV}
+              disabled={exporting || filteredApplications.length === 0}
+              className={`inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg ${
+                exporting || filteredApplications.length === 0
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'text-gray-700 bg-white hover:bg-gray-50'
+              }`}
+            >
+              {exporting ? (
+                <>
+                  <div className="w-4 h-4 mr-2 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <FaDownload className="w-4 h-4 mr-2" />
+                  Export CSV ({filteredApplications.length})
+                </>
+              )}
+            </button>
+          </div>
+          
+          {filteredApplications.length === 0 && (
+            <p className="text-sm text-gray-500 mt-3">
+              No applications available for export. Apply to some jobs first!
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

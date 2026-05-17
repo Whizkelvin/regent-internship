@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { MdEmail } from "react-icons/md";
 import { RiLockPasswordFill } from "react-icons/ri";
-import { FaUserShield, FaExclamationTriangle, FaCheckCircle, FaArrowRight } from "react-icons/fa";
+import { FaUserShield, FaExclamationTriangle, FaCheckCircle, FaArrowRight, FaBuilding, FaUserTie } from "react-icons/fa";
 
 const Signin = () => {
   const navigate = useNavigate();
@@ -30,51 +30,75 @@ const Signin = () => {
   };
 
   const handleSignin = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setErrorMsg("");
-  setSuccessMsg("");
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg("");
+    setSuccessMsg("");
 
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: formData.email,
-      password: formData.password,
-    });
-
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
-
-    if (!data.session || !data.user) {
-      setErrorMsg("Please verify your email before logging in.");
-      return;
-    }
-
-    const user = data.user;
-
-    // ✅ ADMIN CHECK
-    if (user.email === "admin@regent.edu.gh") {
-      await supabase.auth.updateUser({
-        data: { role: "admin" },
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
       });
 
-      setSuccessMsg("Admin login successful! Redirecting...");
-      setTimeout(() => navigate("/adminpage"), 1500);
-      return;
+      if (error) {
+        setErrorMsg(error.message);
+        return;
+      }
+
+      if (!data.session || !data.user) {
+        setErrorMsg("Please verify your email before logging in.");
+        return;
+      }
+
+      const user = data.user;
+
+      // Fetch user role from profiles table
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, company_name')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
+      }
+
+      const userRole = profile?.role || 'user';
+      const companyName = profile?.company_name;
+
+      // Update user metadata with role
+      await supabase.auth.updateUser({
+        data: { role: userRole, company_name: companyName }
+      });
+
+      setSuccessMsg(`Welcome back! Redirecting to ${userRole} dashboard...`);
+
+      // Redirect based on role
+      setTimeout(() => {
+        switch (userRole) {
+          case 'admin':
+            navigate('/adminpage');
+            break;
+          case 'ess_officer':
+            navigate('/ess-officer');
+            break;
+          case 'company':
+            navigate('/company-dashboard');
+            break;
+          default:
+            navigate('/home');
+            break;
+        }
+      }, 1500);
+
+    } catch (err) {
+      console.error('Login error:', err);
+      setErrorMsg("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    // ✅ NORMAL USER
-    setSuccessMsg("Login successful! Redirecting...");
-    setTimeout(() => navigate("/home"), 1500);
-
-  } catch (err) {
-    setErrorMsg("Something went wrong. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4 relative overflow-hidden">
@@ -214,7 +238,7 @@ const Signin = () => {
                 </form>
 
                 {/* Sign Up Link */}
-                <div className="text-center mt-8 pt-6 border-t border-gray-200">
+                <div className="text-center mt-6 pt-4 border-t border-gray-200">
                   <p className="text-gray-600 text-sm">
                     Don't have an account?{" "}
                     <button
@@ -227,7 +251,7 @@ const Signin = () => {
                 </div>
 
                 {/* Security Notice */}
-                <div className="mt-6 text-center">
+                <div className="mt-4 text-center">
                   <p className="text-xs text-gray-500">
                     🔒 Secure authentication powered by Regent University
                   </p>

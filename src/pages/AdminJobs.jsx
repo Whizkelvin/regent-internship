@@ -148,90 +148,127 @@ const AdminJobs = () => {
     return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, []);
 
-  const sendMessageToApplicant = async () => {
-    if (!message.trim() || !selectedApplication) return;
+const sendMessageToApplicant = async () => {
+  if (!message.trim() || !selectedApplication) return;
 
-    try {
-      setSendingMessage(true);
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const { error } = await supabase
-        .from('application_messages')
-        .insert([{
-          full_name: selectedApplication.full_name,
-          email: selectedApplication.email,
-          subject: 'Admin Message',
-          message: message,
-          message_type: 'admin_reply',
-          created_at: new Date().toISOString()
-        }]);
-
-      if (error) throw error;
-
-      try {
-        await supabase.functions.invoke('send-email', {
-          body: {
-            to: selectedApplication.email,
-            subject: 'Message from Job Portal Admin',
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>New Message from Job Portal Admin</h2>
-                <p>Hello ${selectedApplication.full_name},</p>
-                <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  ${message.replace(/\n/g, '<br>')}
-                </div>
-                <p>Best regards,<br>Job Portal Team</p>
-              </div>
-            `
-          }
-        });
-      } catch (emailError) {
-        console.error('Failed to send email:', emailError);
-      }
-
-      setMessage('');
-      setShowMessageModal(false);
-      fetchApplicationMessages();
-      showNotification('Success', 'Message sent successfully', 'success');
-    } catch (error) {
-      console.error('Error sending message:', error);
-      showNotification('Error', 'Failed to send message', 'error');
-    } finally {
-      setSendingMessage(false);
+  try {
+    setSendingMessage(true);
+    
+    const { data: { user: adminUser } } = await supabase.auth.getUser();
+    
+    if (!adminUser) {
+      throw new Error('You must be logged in to send messages');
     }
-  };
+
+    console.log('Sending message:', {
+      application_id: selectedApplication.id,
+      sender_id: adminUser.id,
+      receiver_id: selectedApplication.user_id,
+      message: message.trim()
+    });
+
+    // Insert message into application_messages table
+    const { data: newMessage, error: insertError } = await supabase
+      .from('application_messages')
+      .insert([{
+        application_id: selectedApplication.id,
+        sender_id: adminUser.id,
+        receiver_id: selectedApplication.user_id,
+        message: message.trim(),
+        is_read: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Insert error:', insertError);
+      throw insertError;
+    }
+
+    console.log('Message sent successfully:', newMessage);
+
+    // Also send email notification (optional)
+    try {
+      await supabase.functions.invoke('send-email', {
+        body: {
+          to: selectedApplication.email || selectedApplication.profiles?.email,
+          subject: `Message regarding your application for ${selectedApplication.jobs?.title}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>New Message from Admin</h2>
+              <p>Hello ${selectedApplication.full_name || selectedApplication.profiles?.full_name},</p>
+              <p>You have received a new message regarding your application for <strong>${selectedApplication.jobs?.title}</strong> at <strong>${selectedApplication.jobs?.company}</strong>.</p>
+              <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                ${message.replace(/\n/g, '<br>')}
+              </div>
+              <p>Please log in to your account to view and reply to this message.</p>
+              <p>Best regards,<br>Job Portal Team</p>
+            </div>
+          `
+        }
+      });
+    } catch (emailError) {
+      console.error('Failed to send email notification:', emailError);
+      // Don't throw error - message was saved successfully
+    }
+
+    // Clear form and close modal
+    setMessage('');
+    setShowMessageModal(false);
+    
+    // Refresh messages in the Message component
+    await fetchApplicationMessages();
+    await fetchApplications(); // Refresh applications to update any UI
+    
+    showNotification('Success', 'Message sent successfully to applicant', 'success');
+    
+  } catch (error) {
+    console.error('Error sending message:', error);
+    showNotification('Error', `Failed to send message: ${error.message}`, 'error');
+  } finally {
+    setSendingMessage(false);
+  }
+};
 
  const fetchApplicationMessages = useCallback(async (applicationId) => {
   try {
-    // If fetching messages for a specific application
+    let query = supabase
+      .from('application_messages')
+      .select(`
+        *,
+        sender:sender_id (id, email, full_name),
+        receiver:receiver_id (id, email, full_name)
+      `)
+      .order('created_at', { ascending: false });
+
     if (applicationId) {
-      const { data, error } = await supabase
-        .from("application_messages")
-        .select(`
-          *,
-          sender:sender_id (id, email)
-        `)
-        .eq("application_id", applicationId)
-        .order("created_at", { ascending: true });
-
-      if (!error) {
-        console.log("Application messages:", data);
-        setApplicationMessages(data || []);
-      }
-    } else {
-      // Fetch all messages for admin
-      const { data, error } = await supabase
-        .from("application_messages")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (!error) {
-        console.log("All messages:", data);
-        setApplicationMessages(data || []);
-      }
+      query = query.eq('application_id', applicationId);
     }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    
+    console.log('Messages fetched:', data?.length || 0);
+    
+    // Get current user
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    
+    // Enhance messages with additional info
+    const enhancedMessages = (data || []).map(msg => ({
+      ...msg,
+      is_from_admin: msg.sender?.role === 'admin',
+      is_to_applicant: msg.receiver?.role === 'applicant',
+      sender_name: msg.sender?.full_name || (msg.sender_id === currentUser?.id ? 'You' : 'User'),
+      receiver_name: msg.receiver?.full_name || 'User'
+    }));
+    
+    setApplicationMessages(enhancedMessages);
+    
   } catch (error) {
-    console.error("Error fetching messages:", error);
+    console.error('Error fetching messages:', error);
     setApplicationMessages([]);
   }
 }, []);
@@ -335,6 +372,88 @@ const AdminJobs = () => {
       setLoading(false);
     }
   };
+
+  // Add this function to AdminJobs.jsx (around line 400-450 where other handlers are)
+
+const handleUpdateUserRole = async (userId, newRole) => {
+  try {
+    // Update role in profiles table
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ 
+        role: newRole,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (profileError) throw profileError;
+
+    // Also update user metadata in auth
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // Fetch the user's email to update metadata
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .single();
+    
+    if (profile?.email) {
+      // Update user metadata (optional - for consistency)
+      await supabase.auth.admin.updateUserById(userId, {
+        user_metadata: { role: newRole }
+      }).catch(err => console.warn('Could not update auth metadata:', err));
+    }
+    
+    showNotification('Success', `User role updated to ${newRole}`, 'success');
+    
+    // Refresh users list
+    fetchUsers();
+    
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    showNotification('Error', 'Failed to update user role: ' + error.message, 'error');
+  }
+};
+
+// Add this function to AdminJobs.jsx
+const handleAddUser = async (userData) => {
+  try {
+    // Create the auth user
+    const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+      options: {
+        data: {
+          full_name: userData.full_name,
+          role: userData.role
+        }
+      }
+    });
+
+    if (signUpError) throw signUpError;
+
+    if (!authData.user) {
+      throw new Error('Failed to create user');
+    }
+
+    console.log('User created:', authData.user);
+
+    // The profile should be auto-created by the database trigger
+    // Wait a moment for the trigger to fire
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    showNotification('Success', `User ${userData.email} added successfully with role: ${userData.role}`, 'success');
+    
+    // Refresh users list
+    await fetchUsers();
+    
+  } catch (error) {
+    console.error('Error adding user:', error);
+    showNotification('Error', `Failed to add user: ${error.message}`, 'error');
+    throw error;
+  }
+};
 
   // Create new job
   const handleCreateJob = async () => {
@@ -462,152 +581,59 @@ const AdminJobs = () => {
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      
-      if (!supabaseAdmin) {
-        throw new Error('Admin client not configured');
-      }
-      
-      const { data: { users }, error: authError } = await supabaseAdmin.auth.admin.listUsers();
-      
-      if (authError) {
-        throw new Error(`Failed to fetch users from Auth: ${authError.message}`);
-      }
-      
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*');
-      
-      if (profilesError) {
-        console.warn('Profiles fetch warning:', profilesError.message);
-      }
-      
-      const mergedUsers = (users || []).map(authUser => {
-        const profile = profiles?.find(p => p.id === authUser.id) || {};
-        
-        const lastActive = authUser.last_sign_in_at 
-          ? formatDistanceToNow(new Date(authUser.last_sign_in_at), { addSuffix: true })
-          : 'Never';
-        
-        const joinedDate = authUser.created_at 
-          ? formatDistanceToNow(new Date(authUser.created_at), { addSuffix: true })
-          : 'Recently';
-        
-        return {
-          id: authUser.id,
-          email: authUser.email,
-          full_name: profile.full_name || 
-                    authUser.user_metadata?.full_name || 
-                    authUser.email?.split('@')[0] || 
-                    'User',
-          role: profile.role || authUser.user_metadata?.role || 'user',
-          status: authUser.banned ? 'banned' : 'active',
-          phone: profile.phone || authUser.phone || null,
-          created_at: authUser.created_at,
-          formatted_created_at: joinedDate,
-          last_sign_in_at: authUser.last_sign_in_at,
-          formatted_last_active: lastActive,
-          email_confirmed: authUser.email_confirmed_at !== null,
-          last_active: authUser.last_sign_in_at || 'Never',
-          is_super_admin: authUser.is_super_admin || false,
-          raw_user: authUser
-        };
-      });
-      
-      mergedUsers.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      
-      setUsers(mergedUsers);
-      setFilteredUsers(mergedUsers);
-      
-      setStats(prev => ({
-        ...prev,
-        users: mergedUsers.length,
-        activeUsers: mergedUsers.filter(u => u.status === 'active').length
-      }));
-      
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      
-      try {
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (profilesError) {
-          throw profilesError;
-        }
-        
-        const fallbackUsers = (profiles || []).map(profile => ({
-          id: profile.id,
-          email: profile.email || 'No email',
-          full_name: profile.full_name || profile.email?.split('@')[0] || 'User',
-          role: profile.role || 'user',
-          status: profile.banned ? 'banned' : 'active',
-          phone: profile.phone || null,
-          created_at: profile.created_at,
-          formatted_created_at: profile.created_at 
-            ? formatDistanceToNow(new Date(profile.created_at), { addSuffix: true })
-            : 'Recently',
-          last_sign_in_at: profile.last_sign_in_at || profile.created_at,
-          formatted_last_active: profile.last_sign_in_at 
-            ? formatDistanceToNow(new Date(profile.last_sign_in_at), { addSuffix: true })
-            : 'Never',
-          email_confirmed: true,
-          is_super_admin: profile.role === 'admin'
-        }));
-        
-        setUsers(fallbackUsers);
-        setFilteredUsers(fallbackUsers);
-        
-        showNotification(
-          'Info', 
-          `Loaded ${fallbackUsers.length} users from profiles`, 
-          'info'
-        );
-        
-      } catch (fallbackError) {
-        console.error('Fallback failed:', fallbackError);
-        
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        
-        if (currentUser) {
-          const singleUser = [{
-            id: currentUser.id,
-            email: currentUser.email,
-            full_name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Admin',
-            role: 'admin',
-            status: 'active',
-            created_at: currentUser.created_at,
-            formatted_created_at: formatDistanceToNow(new Date(currentUser.created_at), { addSuffix: true }),
-            last_sign_in_at: currentUser.last_sign_in_at,
-            formatted_last_active: currentUser.last_sign_in_at 
-              ? formatDistanceToNow(new Date(currentUser.last_sign_in_at), { addSuffix: true })
-              : 'Now',
-            email_confirmed: true,
-            is_super_admin: true
-          }];
-          
-          setUsers(singleUser);
-          setFilteredUsers(singleUser);
-          
-          showNotification(
-            'Limited View', 
-            'Only showing current user. Check admin configuration.',
-            'warning'
-          );
-        } else {
-          setUsers([]);
-          setFilteredUsers([]);
-          showNotification('Error', 'Failed to load any user data', 'error');
-        }
-      }
-    } finally {
-      setLoading(false);
+const fetchUsers = async () => {
+  try {
+    setLoading(true);
+    
+    // Fetch users directly from profiles table (NOT from auth)
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (profilesError) {
+      throw profilesError;
     }
-  };
+    
+    console.log('Fetched users from profiles:', profiles);
+    
+    // Format the users data
+    const formattedUsers = (profiles || []).map(profile => ({
+      id: profile.id,
+      email: profile.email || 'No email',
+      full_name: profile.full_name || profile.email?.split('@')[0] || 'User',
+      role: profile.role || 'user',
+      status: profile.status || 'active',
+      phone: profile.phone || null,
+      created_at: profile.created_at,
+      formatted_created_at: profile.created_at 
+        ? formatDistanceToNow(new Date(profile.created_at), { addSuffix: true })
+        : 'Recently',
+      updated_at: profile.updated_at,
+      avatar_url: profile.avatar_url,
+      banned: profile.banned || false
+    }));
+    
+    setUsers(formattedUsers);
+    setFilteredUsers(formattedUsers);
+    
+    setStats(prev => ({
+      ...prev,
+      users: formattedUsers.length,
+      activeUsers: formattedUsers.filter(u => u.status === 'active').length
+    }));
+    
+    showNotification('Success', `Loaded ${formattedUsers.length} users`, 'success');
+    
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    showNotification('Error', 'Failed to load users: ' + error.message, 'error');
+    setUsers([]);
+    setFilteredUsers([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Mobile navigation functions
   const toggleMobileMenu = () => {
@@ -624,56 +650,66 @@ const AdminJobs = () => {
   };
 
   // Delete user from auth and profiles
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      return;
-    }
+ const handleDeleteUser = async (userId) => {
+  if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+    return;
+  }
 
-    try {
-      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-      
-      if (authError) throw authError;
-      
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
-      
-      if (profileError) throw profileError;
-      
-      showNotification('Success', 'User deleted successfully', 'success');
-      fetchUsers();
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      showNotification('Error', 'Failed to delete user', 'error');
+  try {
+    // Delete from profiles table only (not from auth)
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (profileError) {
+      throw profileError;
     }
-  };
+    
+    showNotification('Success', 'User deleted successfully', 'success');
+    
+    // Immediately update local state to remove the user from UI
+    setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+    setFilteredUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+    
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    showNotification('Error', 'Failed to delete user: ' + error.message, 'error');
+  }
+};
+
 
   // Update user status (ban/unban)
-  const handleUpdateUserStatus = async (userId, status) => {
-    try {
-      if (status === 'banned') {
-        const { error } = await supabase.auth.admin.updateUserById(userId, {
-          ban_duration: 'permanent'
-        });
-        
-        if (error) throw error;
-        showNotification('Success', 'User banned successfully', 'success');
-      } else {
-        const { error } = await supabase.auth.admin.updateUserById(userId, {
-          ban_duration: 'none'
-        });
-        
-        if (error) throw error;
-        showNotification('Success', 'User activated successfully', 'success');
-      }
-      
-      fetchUsers();
-    } catch (error) {
-      console.error('Error updating user status:', error);
-      showNotification('Error', 'Failed to update user status', 'error');
-    }
-  };
+const handleUpdateUserStatus = async (userId, status) => {
+  try {
+    const newStatus = status === 'banned' ? 'banned' : 'active';
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        status: newStatus,
+        banned: status === 'banned',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+    
+    showNotification('Success', `User ${newStatus === 'active' ? 'activated' : 'banned'} successfully`, 'success');
+    
+    // Update local state
+    setUsers(prevUsers => prevUsers.map(user => 
+      user.id === userId ? { ...user, status: newStatus, banned: status === 'banned' } : user
+    ));
+    setFilteredUsers(prevUsers => prevUsers.map(user => 
+      user.id === userId ? { ...user, status: newStatus, banned: status === 'banned' } : user
+    ));
+    
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    showNotification('Error', 'Failed to update user status', 'error');
+  }
+};
 
   // Image upload handler
   const handleImageUpload = async (file, type) => {
@@ -775,96 +811,100 @@ const deleteMessage = async (messageId) => {
   }
 };
 
-  // Active tab content
-  const renderActiveTab = () => {
-    switch (activeTab) {
-      case 'jobs':
-        return (
-          <JobsTab
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            filteredJobs={filteredJobs}
-            loading={loading}
-            fetchJobs={fetchJobs}
-            openEditModal={openEditModal}
-            toggleJobStatus={toggleJobStatus}
-            setJobToDelete={setJobToDelete}
-            setShowDeleteModal={setShowDeleteModal}
-            setShowCreateModal={setShowCreateModal}
-          />
-        );
-      case 'users':
-        return (
-          <UsersTab
-            userSearchTerm={userSearchTerm}
-            setUserSearchTerm={setUserSearchTerm}
-            filteredUsers={filteredUsers}
-            loading={loading}
-            fetchUsers={fetchUsers}
-            setSelectedUser={setSelectedUser}
-            setShowUserDetails={setShowUserDetails}
-            setShowMessageModal={setShowMessageModal}
-            setMessage={setMessage}
-            handleDeleteUser={handleDeleteUser}
-            handleUpdateUserStatus={handleUpdateUserStatus}
-          />
-        );
-      case 'applications':
-        return (
-          <ApplicationsTab
-            applications={applications}
-            applicationSearchTerm={applicationSearchTerm}
-            setApplicationSearchTerm={setApplicationSearchTerm}
-            applicationStatusFilter={applicationStatusFilter}
-            setApplicationStatusFilter={setApplicationStatusFilter}
-            loading={loading}
-            fetchApplications={fetchApplications}
-            setSelectedApplication={setSelectedApplication}
-            setShowApplicationDetails={setShowApplicationDetails}
-            acceptApplication={async (id) => {
-              try {
-                await supabase
-                  .from('applications')
-                  .update({ status: 'accepted' })
-                  .eq('id', id);
-                fetchApplications();
-                showNotification('Success', 'Application accepted', 'success');
-              } catch (error) {
-                showNotification('Error', 'Failed to accept application', 'error');
-              }
-            }}
-            rejectApplication={async (id) => {
-              try {
-                await supabase
-                  .from('applications')
-                  .update({ status: 'rejected' })
-                  .eq('id', id);
-                fetchApplications();
-                showNotification('Success', 'Application rejected', 'success');
-              } catch (error) {
-                showNotification('Error', 'Failed to reject application', 'error');
-              }
-            }}
-          />
-        );
-      case 'messages':
-        return (
-          <MessagesTab
-            applicationMessages={applicationMessages}
-            applications={applications}
-            loading={loading}
-            fetchApplicationMessages={fetchApplicationMessages}
-            setSelectedApplication={setSelectedApplication}
-            setShowMessageModal={setShowMessageModal}
-            setShowApplicationDetails={setShowApplicationDetails}
-            markMessageAsRead={markMessageAsRead}
-            deleteMessage={deleteMessage}
-          />
-        );
-      default:
-        return null;
-    }
-  };
+
+// Active tab content
+const renderActiveTab = () => {
+  switch (activeTab) {
+    case 'jobs':
+      return (
+        <JobsTab
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          filteredJobs={filteredJobs}
+          loading={loading}
+          fetchJobs={fetchJobs}
+          openEditModal={openEditModal}
+          toggleJobStatus={toggleJobStatus}
+          setJobToDelete={setJobToDelete}
+          setShowDeleteModal={setShowDeleteModal}
+          setShowCreateModal={setShowCreateModal}
+        />
+      );
+    case 'users':
+      return (
+        <UsersTab
+          userSearchTerm={userSearchTerm}
+          setUserSearchTerm={setUserSearchTerm}
+          filteredUsers={filteredUsers}
+          setFilteredUsers={setFilteredUsers}  // ← ADD THIS
+          loading={loading}
+          fetchUsers={fetchUsers}
+          setSelectedUser={setSelectedUser}
+          setShowUserDetails={setShowUserDetails}
+          setShowMessageModal={setShowMessageModal}
+          setMessage={setMessage}
+          handleDeleteUser={handleDeleteUser}
+          handleUpdateUserStatus={handleUpdateUserStatus}
+          handleAddUser={handleAddUser}  // ← ADD THIS
+          handleUpdateUserRole={handleUpdateUserRole}  // ← ADD THIS
+        />
+      );
+    case 'applications':
+      return (
+        <ApplicationsTab
+          applications={applications}
+          applicationSearchTerm={applicationSearchTerm}
+          setApplicationSearchTerm={setApplicationSearchTerm}
+          applicationStatusFilter={applicationStatusFilter}
+          setApplicationStatusFilter={setApplicationStatusFilter}
+          loading={loading}
+          fetchApplications={fetchApplications}
+          setSelectedApplication={setSelectedApplication}
+          setShowApplicationDetails={setShowApplicationDetails}
+          acceptApplication={async (id) => {
+            try {
+              await supabase
+                .from('applications')
+                .update({ status: 'accepted' })
+                .eq('id', id);
+              fetchApplications();
+              showNotification('Success', 'Application accepted', 'success');
+            } catch (error) {
+              showNotification('Error', 'Failed to accept application', 'error');
+            }
+          }}
+          rejectApplication={async (id) => {
+            try {
+              await supabase
+                .from('applications')
+                .update({ status: 'rejected' })
+                .eq('id', id);
+              fetchApplications();
+              showNotification('Success', 'Application rejected', 'success');
+            } catch (error) {
+              showNotification('Error', 'Failed to reject application', 'error');
+            }
+          }}
+        />
+      );
+    case 'messages':
+      return (
+        <MessagesTab
+          applicationMessages={applicationMessages}
+          applications={applications}
+          loading={loading}
+          fetchApplicationMessages={fetchApplicationMessages}
+          setSelectedApplication={setSelectedApplication}
+          setShowMessageModal={setShowMessageModal}
+          setShowApplicationDetails={setShowApplicationDetails}
+          markMessageAsRead={markMessageAsRead}
+          deleteMessage={deleteMessage}
+        />
+      );
+    default:
+      return null;
+  }
+};
 
   // Enhanced Mobile Navigation Component
   const MobileNavigation = () => {

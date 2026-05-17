@@ -13,7 +13,10 @@ import {
   FaIdCard,
   FaBuilding,
   FaArrowRight,
-  FaCheckCircle
+  FaCheckCircle,
+  FaEye,
+  FaEyeSlash,
+  FaExclamationTriangle
 } from "react-icons/fa";
 import { MdDateRange } from "react-icons/md";
 
@@ -24,6 +27,7 @@ const Signup = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [studentId, setStudentId] = useState("");
   const [program, setProgram] = useState("");
   const [graduationYear, setGraduationYear] = useState("");
@@ -31,27 +35,182 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  // Validation states
+  const [validationErrors, setValidationErrors] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    studentId: "",
+    phone: ""
+  });
+
+  // Validate name (no numbers allowed)
+  const validateName = (value) => {
+    if (!value.trim()) {
+      return "Name is required";
+    }
+    if (/\d/.test(value)) {
+      return "Name should not contain numbers";
+    }
+    if (value.length < 2) {
+      return "Name must be at least 2 characters";
+    }
+    return "";
+  };
+
+  // Validate email format
+  const validateEmail = (value) => {
+    if (!value) return "Email is required";
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value)) {
+      return "Please enter a valid email address";
+    }
+    if (role === "student" && !value.endsWith("@regent.edu.gh")) {
+      return "Students must use @regent.edu.gh email address";
+    }
+    return "";
+  };
+
+  // Validate password strength
+  const validatePassword = (value) => {
+    if (!value) return "Password is required";
+    if (value.length < 8) {
+      return "Password must be at least 8 characters long";
+    }
+    if (!/[A-Z]/.test(value)) {
+      return "Password must contain at least one uppercase letter";
+    }
+    if (!/[a-z]/.test(value)) {
+      return "Password must contain at least one lowercase letter";
+    }
+    if (!/[0-9]/.test(value)) {
+      return "Password must contain at least one number";
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) {
+      return "Password must contain at least one special character (!@#$%^&* etc.)";
+    }
+    return "";
+  };
+
+  // Validate confirm password
+  const validateConfirmPassword = (value) => {
+    if (!value) return "Please confirm your password";
+    if (value !== password) {
+      return "Passwords do not match";
+    }
+    return "";
+  };
+
+  // Validate student ID
+  const validateStudentId = (value) => {
+    if (!value) return "Student ID is required";
+    if (value.length < 5) {
+      return "Student ID must be at least 5 characters";
+    }
+    return "";
+  };
+
+  // Validate phone number
+  const validatePhone = (value) => {
+    if (!value) return "Phone number is required";
+    const phoneRegex = /^[0-9+\-\s()]{10,}$/;
+    if (!phoneRegex.test(value)) {
+      return "Please enter a valid phone number";
+    }
+    return "";
+  };
+
+  // Handle name change with validation
+  const handleNameChange = (e) => {
+    const value = e.target.value;
+    setName(value);
+    setValidationErrors(prev => ({ ...prev, name: validateName(value) }));
+  };
+
+  // Handle email change with validation
+  const handleEmailChange = (e) => {
+    const value = e.target.value;
+    setEmail(value);
+    setValidationErrors(prev => ({ ...prev, email: validateEmail(value) }));
+  };
+
+  // Handle password change with validation
+  const handlePasswordChange = (e) => {
+    const value = e.target.value;
+    setPassword(value);
+    setValidationErrors(prev => ({ ...prev, password: validatePassword(value) }));
+    if (confirmPassword) {
+      setValidationErrors(prev => ({ ...prev, confirmPassword: validateConfirmPassword(confirmPassword) }));
+    }
+  };
+
+  // Handle confirm password change
+  const handleConfirmPasswordChange = (e) => {
+    const value = e.target.value;
+    setConfirmPassword(value);
+    setValidationErrors(prev => ({ ...prev, confirmPassword: validateConfirmPassword(value) }));
+  };
+
+  // Handle student ID change
+  const handleStudentIdChange = (e) => {
+    const value = e.target.value;
+    setStudentId(value);
+    setValidationErrors(prev => ({ ...prev, studentId: validateStudentId(value) }));
+  };
+
+  // Handle phone change
+  const handlePhoneChange = (e) => {
+    const value = e.target.value;
+    setPhone(value);
+    setValidationErrors(prev => ({ ...prev, phone: validatePhone(value) }));
+  };
+
+  // Get password strength indicator
+  const getPasswordStrength = () => {
+    if (!password) return { level: 0, text: "", color: "" };
+    
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[a-z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) strength++;
+    
+    if (strength <= 2) return { level: 1, text: "Weak", color: "text-red-600 bg-red-50" };
+    if (strength <= 3) return { level: 2, text: "Medium", color: "text-yellow-600 bg-yellow-50" };
+    if (strength <= 4) return { level: 3, text: "Good", color: "text-blue-600 bg-blue-50" };
+    return { level: 4, text: "Strong", color: "text-green-600 bg-green-50" };
+  };
+
+  const passwordStrength = getPasswordStrength();
 
   const handleSignup = async (e) => {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
-    setLoading(true);
 
-    if (!email.includes("@")) {
-      setErrorMsg("Invalid email format");
-      setLoading(false);
-      return;
-    }
+    // Validate all fields
+    const nameError = validateName(name);
+    const emailError = validateEmail(email);
+    const passwordError = validatePassword(password);
+    const confirmPasswordError = validateConfirmPassword(confirmPassword);
+    const studentIdError = validateStudentId(studentId);
+    const phoneError = validatePhone(phone);
 
-    if (role === "student" && !email.includes("@regent.edu.gh")) {
-      setErrorMsg("Please use your Regent University email address");
-      setLoading(false);
-      return;
-    }
-
-    if (password.length < 6) {
-      setErrorMsg("Password must be at least 6 characters long");
+    if (nameError || emailError || passwordError || confirmPasswordError || studentIdError || phoneError) {
+      setValidationErrors({
+        name: nameError,
+        email: emailError,
+        password: passwordError,
+        confirmPassword: confirmPasswordError,
+        studentId: studentIdError,
+        phone: phoneError
+      });
+      setErrorMsg("Please fix the validation errors before submitting");
       setLoading(false);
       return;
     }
@@ -62,6 +221,14 @@ const Signup = () => {
       return;
     }
 
+    if (role === "student" && (!program || !graduationYear)) {
+      setErrorMsg("Please fill in all academic information");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -69,7 +236,7 @@ const Signup = () => {
         options: {
           data: {
             role,
-            name,
+            full_name: name,
             student_id: studentId,
             program,
             graduation_year: graduationYear,
@@ -80,13 +247,38 @@ const Signup = () => {
 
       if (error) throw error;
 
+      // Insert into profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([{
+          id: data.user?.id,
+          email: email,
+          full_name: name,
+          role: role,
+          phone: phone,
+          student_id: studentId,
+          program: program,
+          graduation_year: graduationYear,
+          status: 'active',
+          created_at: new Date().toISOString()
+        }]);
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+      }
+
       setSuccessMsg("Account created successfully! Please check your email for verification.");
+      
+      // Reset form
+      setName("");
       setEmail("");
       setPassword("");
+      setConfirmPassword("");
       setStudentId("");
       setProgram("");
       setGraduationYear("");
       setPhone("");
+      setRole("");
 
       setTimeout(() => navigate("/"), 3000);
     } catch (error) {
@@ -124,7 +316,6 @@ const Signup = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4 relative overflow-hidden">
-      {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-0 left-0 w-64 h-64 bg-green-950/5 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
         <div className="absolute bottom-0 right-0 w-80 h-80 bg-red-950/5 rounded-full translate-x-1/3 translate-y-1/3"></div>
@@ -134,18 +325,16 @@ const Signup = () => {
       <div className="relative w-full max-w-6xl">
         <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-gray-200 overflow-hidden">
           <div className="flex flex-col lg:flex-row">
-            {/* Left Side - Form */}
             <div className="flex-1 p-8 lg:p-12">
               <div className="max-w-md mx-auto">
-                {/* Header */}
                 <div className="text-center mb-8">
                   <div className="flex items-center justify-center space-x-4 mb-6">
-                    <div className="w-16 h-16  rounded-2xl flex items-center justify-center shadow-lg">
-                     <img
-                  src="https://res.cloudinary.com/dnkk72bpt/image/upload/v1762440313/RUCST_logo-removebg-preview_hwdial.png"
-                  alt="Regent University Badge"
-                  className="w-16 h-16"
-                />
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg">
+                      <img
+                        src="https://res.cloudinary.com/dnkk72bpt/image/upload/v1762440313/RUCST_logo-removebg-preview_hwdial.png"
+                        alt="Regent University Badge"
+                        className="w-16 h-16"
+                      />
                     </div>
                     <div>
                       <h1 className="text-3xl font-bold text-gray-900">Create Account</h1>
@@ -155,12 +344,11 @@ const Signup = () => {
                   <div className="w-24 h-1 bg-gradient-to-r from-green-950 to-red-950 rounded-full mx-auto"></div>
                 </div>
 
-                <form onSubmit={handleSignup} className="space-y-6">
+                <form onSubmit={handleSignup} className="space-y-5">
                   {/* Role Selection */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700 block">
-                      I am a:
-                      <span className="text-red-950 ml-1">*</span>
+                      I am a: <span className="text-red-950 ml-1">*</span>
                     </label>
                     <div className="relative">
                       <select
@@ -177,9 +365,6 @@ const Signup = () => {
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         {getRoleIcon()}
                       </div>
-                      <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                        <MdDateRange className="w-4 h-4 text-gray-400" />
-                      </div>
                     </div>
                     {role && (
                       <p className="text-xs text-gray-600 bg-green-50 p-2 rounded-lg border border-green-200">
@@ -191,97 +376,171 @@ const Signup = () => {
                   {/* Name Field */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700 block">
-                      Full Name
-                      <span className="text-red-950 ml-1">*</span>
+                      Full Name <span className="text-red-950 ml-1">*</span>
                     </label>
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder={`Enter your ${role || 'user'} name`}
+                        placeholder="Enter your full name (letters only)"
                         value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300"
+                        onChange={handleNameChange}
+                        className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                          validationErrors.name ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                        }`}
                         required
                       />
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <FaUser className="w-5 h-5 text-gray-400" />
                       </div>
                     </div>
+                    {validationErrors.name && (
+                      <p className="text-xs text-red-600 flex items-center mt-1">
+                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.name}
+                      </p>
+                    )}
                   </div>
 
                   {/* Email Field */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700 block">
-                      Email Address
-                      <span className="text-red-950 ml-1">*</span>
+                      Email Address <span className="text-red-950 ml-1">*</span>
                     </label>
                     <div className="relative">
                       <input
                         type="email"
-                        placeholder={`Enter your ${role || 'user'} email`}
+                        placeholder="Enter your email address"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300"
+                        onChange={handleEmailChange}
+                        className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                          validationErrors.email ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                        }`}
                         required
                       />
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <FaEnvelope className="w-5 h-5 text-gray-400" />
                       </div>
                     </div>
-                    {role === "student" && (
-                      <p className="text-xs text-gray-600">Please use your @regent.edu.gh email address</p>
+                    {validationErrors.email && (
+                      <p className="text-xs text-red-600 flex items-center mt-1">
+                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.email}
+                      </p>
+                    )}
+                    {role === "student" && !validationErrors.email && email && (
+                      <p className="text-xs text-green-600">✓ Using Regent email address</p>
                     )}
                   </div>
 
                   {/* Password Field */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700 block">
-                      Password
-                      <span className="text-red-950 ml-1">*</span>
+                      Password <span className="text-red-950 ml-1">*</span>
                     </label>
                     <div className="relative">
                       <input
-                        type="password"
-                        placeholder="Create a secure password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Create a strong password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300"
+                        onChange={handlePasswordChange}
+                        className={`w-full p-4 pl-12 pr-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                          validationErrors.password ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                        }`}
                         required
                       />
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <FaLock className="w-5 h-5 text-gray-400" />
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center"
+                      >
+                        {showPassword ? <FaEyeSlash className="w-5 h-5 text-gray-400" /> : <FaEye className="w-5 h-5 text-gray-400" />}
+                      </button>
                     </div>
-                    <p className="text-xs text-gray-600">Must be at least 6 characters long</p>
+                    {password && (
+                      <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${passwordStrength.color} mt-1`}>
+                        Password Strength: {passwordStrength.text}
+                      </div>
+                    )}
+                    {validationErrors.password && (
+                      <p className="text-xs text-red-600 flex items-center mt-1">
+                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.password}
+                      </p>
+                    )}
+                    <div className="text-xs text-gray-500 mt-1">
+                      Requirements: Min 8 chars, uppercase, lowercase, number & special character (!@#$%^&*)
+                    </div>
                   </div>
 
-                  {/* ID Field */}
+                  {/* Confirm Password Field */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700 block">
-                      {role === "student" ? "Student ID" : "ID Number"}
-                      <span className="text-red-950 ml-1">*</span>
+                      Confirm Password <span className="text-red-950 ml-1">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Confirm your password"
+                        value={confirmPassword}
+                        onChange={handleConfirmPasswordChange}
+                        className={`w-full p-4 pl-12 pr-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                          validationErrors.confirmPassword ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                        }`}
+                        required
+                      />
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <FaLock className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center"
+                      >
+                        {showConfirmPassword ? <FaEyeSlash className="w-5 h-5 text-gray-400" /> : <FaEye className="w-5 h-5 text-gray-400" />}
+                      </button>
+                    </div>
+                    {validationErrors.confirmPassword && (
+                      <p className="text-xs text-red-600 flex items-center mt-1">
+                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.confirmPassword}
+                      </p>
+                    )}
+                    {confirmPassword && password && !validationErrors.confirmPassword && password === confirmPassword && (
+                      <p className="text-xs text-green-600">✓ Passwords match</p>
+                    )}
+                  </div>
+
+                  {/* Student ID Field */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700 block">
+                      {role === "student" ? "Student ID" : "ID Number"} <span className="text-red-950 ml-1">*</span>
                     </label>
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder={`Enter your ${role || 'user'} ID`}
+                        placeholder={`Enter your ${role === "student" ? "student ID" : "ID number"}`}
                         value={studentId}
-                        onChange={(e) => setStudentId(e.target.value)}
-                        className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300"
+                        onChange={handleStudentIdChange}
+                        className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                          validationErrors.studentId ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                        }`}
                         required
                       />
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <FaIdCard className="w-5 h-5 text-gray-400" />
                       </div>
                     </div>
+                    {validationErrors.studentId && (
+                      <p className="text-xs text-red-600 flex items-center mt-1">
+                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.studentId}
+                      </p>
+                    )}
                   </div>
 
                   {/* Program Field (Students only) */}
                   {role === "student" && (
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-gray-700 block">
-                        Academic Program
-                        <span className="text-red-950 ml-1">*</span>
+                        Academic Program <span className="text-red-950 ml-1">*</span>
                       </label>
                       <div className="relative">
                         <select
@@ -313,8 +572,7 @@ const Signup = () => {
                   {role === "student" && (
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-gray-700 block">
-                        Expected Graduation Year
-                        <span className="text-red-950 ml-1">*</span>
+                        Expected Graduation Year <span className="text-red-950 ml-1">*</span>
                       </label>
                       <div className="relative">
                         <input
@@ -334,31 +592,35 @@ const Signup = () => {
                   {/* Phone Field */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700 block">
-                      Phone Number
-                      <span className="text-red-950 ml-1">*</span>
+                      Phone Number <span className="text-red-950 ml-1">*</span>
                     </label>
                     <div className="relative">
                       <input
-                        type="text"
-                        placeholder="Enter your phone number"
+                        type="tel"
+                        placeholder="Enter your phone number (e.g., +233 XX XXX XXXX)"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300"
+                        onChange={handlePhoneChange}
+                        className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                          validationErrors.phone ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                        }`}
                         required
                       />
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <FaPhone className="w-5 h-5 text-gray-400" />
                       </div>
                     </div>
+                    {validationErrors.phone && (
+                      <p className="text-xs text-red-600 flex items-center mt-1">
+                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.phone}
+                      </p>
+                    )}
                   </div>
 
                   {/* Messages */}
                   {errorMsg && (
                     <div className="p-4 bg-red-50/80 border border-red-900/20 rounded-xl">
                       <div className="flex items-center space-x-3">
-                        <div className="w-5 h-5 bg-red-900 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs">!</span>
-                        </div>
+                        <FaExclamationTriangle className="text-red-900 flex-shrink-0 w-5 h-5" />
                         <span className="text-sm font-medium text-red-900">{errorMsg}</span>
                       </div>
                     </div>
@@ -393,7 +655,6 @@ const Signup = () => {
                         <FaArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 transform translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                   </button>
                 </form>
 
@@ -412,18 +673,19 @@ const Signup = () => {
               </div>
             </div>
 
-            {/* Right Side - Branding with Your Images */}
+            {/* Right Side - Branding */}
             <div className="flex-1 hidden lg:flex relative overflow-hidden">
-              {/* Campus Image Background */}
               <img
                 src="https://res.cloudinary.com/dnkk72bpt/image/upload/v1762440610/Regent-University-College-of-Science-and-Technology-Mallam-Ghana-SchoolFinder-TortoisePathcom_himnme.jpg"
                 alt="Regent University Campus"
                 className="w-full h-full object-cover"
               />
-              
-    
-
-              {/* University Badge */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent flex items-end">
+                <div className="p-8 text-white">
+                  <h2 className="text-2xl font-bold mb-2">Join Our Community</h2>
+                  <p className="text-white/90">Start your career journey today</p>
+                </div>
+              </div>
               <div className="absolute top-6 right-6 bg-white/20 backdrop-blur-sm rounded-2xl p-4 border border-white/30">
                 <img
                   src="https://res.cloudinary.com/dnkk72bpt/image/upload/v1762440313/RUCST_logo-removebg-preview_hwdial.png"

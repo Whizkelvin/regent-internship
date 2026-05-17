@@ -230,8 +230,10 @@ const InternshipJobDescription = () => {
     phone: "",
     cover_letter: "",
     resume_url: "",
+    cv_url: "", // Add CV URL field
   });
   const [uploadingResume, setUploadingResume] = useState(false);
+  const [userCV, setUserCV] = useState(null); // Store user's existing CV
   
   const [userHasApplied, setUserHasApplied] = useState(false);
   const [userApplication, setUserApplication] = useState(null);
@@ -241,7 +243,30 @@ const InternshipJobDescription = () => {
   const [showMessages, setShowMessages] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
 
-  
+  // Fetch user's existing CV
+  useEffect(() => {
+    const fetchUserCV = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from("user_cvs")
+          .select("*")
+          .eq("user_id", user.id)
+          .single();
+
+        if (data && !error) {
+          setUserCV(data);
+          setApplicationForm(prev => ({ ...prev, cv_url: data.cv_url }));
+        }
+      } catch (error) {
+        console.error("Error fetching user CV:", error);
+      }
+    };
+
+    fetchUserCV();
+  }, []);
 
   // Fixed: Separate data fetching from user-specific checks
   useEffect(() => {
@@ -349,7 +374,6 @@ const fetchComments = useCallback(
     try {
       console.log('🔄 Fetching comments for job:', id);
       
-      // Fetch all comments
       const { data: commentsData, error } = await supabase
         .from("job_reviews")
         .select("*")
@@ -365,11 +389,9 @@ const fetchComments = useCallback(
         return;
       }
 
-      // Get current user
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       const currentUserId = currentUser?.id;
 
-      // Get ALL user IDs from comments
       const userIds = [...new Set(commentsData
         .map(comment => comment.user_id)
         .filter(Boolean)
@@ -377,11 +399,9 @@ const fetchComments = useCallback(
 
       console.log('👤 All user IDs in comments:', userIds);
 
-      // Fetch user info for ALL users
       const usersMap = {};
       
       if (userIds.length > 0) {
-        // Method 1: Try to get from profiles table
         try {
           const { data: profiles } = await supabase
             .from('profiles')
@@ -402,13 +422,11 @@ const fetchComments = useCallback(
           console.warn('Could not fetch from profiles:', profileError);
         }
 
-        // Method 2: For any missing users, try auth (requires admin)
         const missingUserIds = userIds.filter(id => !usersMap[id]);
         if (missingUserIds.length > 0) {
           console.log('🔄 Getting missing users from auth:', missingUserIds);
           
           try {
-            // This requires service role key
             const { data: { users } } = await supabase.auth.admin.listUsers();
             
             if (users) {
@@ -431,15 +449,10 @@ const fetchComments = useCallback(
         }
       }
 
-      // Process comments
       const processedComments = commentsData.map(comment => {
         const userInfo = comment.user_id ? usersMap[comment.user_id] : null;
         const isCurrentUser = currentUserId && comment.user_id === currentUserId;
         
-        // Priority for display name:
-        // 1. Already stored in comment
-        // 2. From fetched user info
-        // 3. Generic name
         let displayName = comment.user_display_name;
         let avatarUrl = comment.user_avatar_url;
         let email = comment.user_email;
@@ -458,7 +471,6 @@ const fetchComments = useCallback(
           displayName = 'Anonymous';
         }
         
-        // If it's current user, override
         if (isCurrentUser) {
           displayName = 'You';
           email = currentUser?.email || 'Your email';
@@ -470,7 +482,6 @@ const fetchComments = useCallback(
           user_avatar_url: avatarUrl,
           user_email: email,
           is_current_user: isCurrentUser,
-          // For compatibility with existing code
           profiles: {
             name: displayName,
             avatar_url: avatarUrl
@@ -490,15 +501,13 @@ const fetchComments = useCallback(
   [id]
 );
 
-
   const fetchApplicationMessages = useCallback(async (applicationId) => {
   try {
     console.log('🔄 Fetching messages for application:', applicationId);
     
-    // Direct query - no joins at all
     const { data: messages, error } = await supabase
       .from("application_messages")
-      .select("id, application_id, sender_id, message, is_read, created_at") // Explicit columns only
+      .select("id, application_id, sender_id, message, is_read, created_at")
       .eq("application_id", applicationId)
       .order("created_at", { ascending: true });
 
@@ -506,13 +515,10 @@ const fetchComments = useCallback(
     
     console.log(`✅ Found ${messages?.length || 0} messages`);
     
-    // Get current user
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     
-    // Simple processing - just mark if it's from current user
     const simpleMessages = messages.map(msg => ({
       ...msg,
-      // If we have sender info in the message itself, use it
       full_name: msg.sender_id === currentUser?.id ? 'You' : 
                 (msg.full_name || 'Applicant'),
       email: msg.email || 'No email',
@@ -616,6 +622,7 @@ const fetchComments = useCallback(
         email: user.email || "",
         full_name:
           user.user_metadata?.full_name || user.user_metadata?.name || "",
+        cv_url: userCV?.cv_url || "", // Use existing CV if available
       }));
 
       setShowApplicationModal(true);
@@ -624,7 +631,7 @@ const fetchComments = useCallback(
       alert("Please login to apply for this job");
       navigate("/login");
     }
-  }, [navigate]);
+  }, [navigate, userCV]);
 
   const handleSubmitApplication = useCallback(
     async (e) => {
@@ -659,6 +666,7 @@ const fetchComments = useCallback(
               phone: applicationForm.phone,
               cover_letter: applicationForm.cover_letter,
               resume_url: applicationForm.resume_url,
+              cv_url: applicationForm.cv_url || userCV?.cv_url || null, // Include CV URL
               status: "pending",
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -688,6 +696,7 @@ const fetchComments = useCallback(
           phone: "",
           cover_letter: "",
           resume_url: "",
+          cv_url: "",
         });
 
         alert(
@@ -698,7 +707,7 @@ const fetchComments = useCallback(
         alert("Error submitting application: " + error.message);
       }
     },
-    [id, applicationForm]
+    [id, applicationForm, userCV]
   );
 
   const sendMessageToAdmin = useCallback(
@@ -718,7 +727,6 @@ const fetchComments = useCallback(
           message: newMessage
         });
 
-        // Fix: Make sure to include all required fields
         const { data, error } = await supabase
           .from("application_messages")
           .insert([
@@ -738,7 +746,6 @@ const fetchComments = useCallback(
 
         console.log('Message sent successfully:', data);
 
-        // Refresh messages
         await fetchApplicationMessages(userApplication.id);
         
         setNewMessage("");
@@ -804,7 +811,6 @@ const fetchComments = useCallback(
   );
 
   const handleLikeComment = useCallback((commentId) => {
-    // Implement like functionality
     console.log("Liked comment:", commentId);
   }, []);
 
@@ -825,7 +831,6 @@ const handleAddComment = useCallback(async (e) => {
   setCommentLoading(true);
 
   try {
-    // Get comprehensive user info
     const userDisplayName = user.user_metadata?.full_name || 
                           user.user_metadata?.name || 
                           user.email?.split('@')[0] || 
@@ -840,7 +845,6 @@ const handleAddComment = useCallback(async (e) => {
       email: userEmail
     });
 
-    // Insert with ALL user info
     const { data, error } = await supabase
       .from('job_reviews')
       .insert([
@@ -861,7 +865,6 @@ const handleAddComment = useCallback(async (e) => {
 
     if (error) {
       console.error('❌ Insert error:', error);
-      // Try without the user columns
       const { data: simpleData, error: simpleError } = await supabase
         .from('job_reviews')
         .insert([
@@ -878,7 +881,6 @@ const handleAddComment = useCallback(async (e) => {
         
       if (simpleError) throw simpleError;
       
-      // Add user info manually
       const commentWithUserInfo = {
         ...simpleData,
         user_display_name: userDisplayName,
@@ -888,11 +890,9 @@ const handleAddComment = useCallback(async (e) => {
       
       setComments(prev => [commentWithUserInfo, ...prev]);
     } else {
-      // Success
       setComments(prev => [data, ...prev]);
     }
     
-    // Reset form
     setNewComment('');
     setRating(5);
     
@@ -997,6 +997,26 @@ const handleAddComment = useCallback(async (e) => {
                     disabled={uploadingResume}
                   />
                 </div>
+
+                {/* CV Section - Show existing CV if available */}
+                {userCV && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        {userCV.cv_type === 'application/pdf' ? (
+                          <FaFilePdf className="w-8 h-8 text-red-500" />
+                        ) : (
+                          <FaFileWord className="w-8 h-8 text-blue-500" />
+                        )}
+                        <div>
+                          <p className="font-medium text-gray-900">Your CV on file</p>
+                          <p className="text-sm text-gray-600">{userCV.cv_name}</p>
+                        </div>
+                      </div>
+                      <div className="text-xs text-green-700">Will be attached to your application</div>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1114,6 +1134,7 @@ const handleAddComment = useCallback(async (e) => {
     job,
     applicationForm,
     uploadingResume,
+    userCV,
     handleSubmitApplication,
     handleInputChange,
     handleUploadResume,
@@ -1299,12 +1320,6 @@ const handleAddComment = useCallback(async (e) => {
               </div>
 
               <div className="flex items-center space-x-6 py-4 border-y border-gray-200">
-                <div>
-                  <span className="text-2xl font-bold text-gray-900">
-                    GHS {job.salary_range || "Competitive Salary"}
-                  </span>
-                  <p className="text-sm text-gray-600">Monthly compensation</p>
-                </div>
                 <div className="flex items-center space-x-2">
                   <div className="flex">
                     {[1, 2, 3, 4, 5].map((star) => (
@@ -1372,6 +1387,31 @@ const handleAddComment = useCallback(async (e) => {
                           userApplication.created_at
                         ).toLocaleDateString()}
                       </p>
+                      {userApplication.cv_url && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const response = await fetch(userApplication.cv_url);
+                              const blob = await response.blob();
+                              const url = window.URL.createObjectURL(blob);
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.download = 'my_cv.pdf';
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                              window.URL.revokeObjectURL(url);
+                            } catch (error) {
+                              console.error('Error downloading CV:', error);
+                              alert('Failed to download CV');
+                            }
+                          }}
+                          className="mt-2 text-sm text-green-700 hover:text-green-800 flex items-center space-x-1"
+                        >
+                          <FaDownload className="w-3 h-3" />
+                          <span>Download attached CV</span>
+                        </button>
+                      )}
                     </div>
                     <button
                       onClick={() => navigate("/message")}
@@ -1523,7 +1563,7 @@ const handleAddComment = useCallback(async (e) => {
                       "Flexible work arrangements",
                       "Health insurance coverage",
                       "Performance bonuses",
-                      "Remote work options",
+                      "payment not guaranteed",
                       "Team building activities",
                     ].map((benefit, index) => (
                       <div key={index} className="flex items-center space-x-3">
@@ -1596,7 +1636,6 @@ const handleAddComment = useCallback(async (e) => {
         </div>
       ) : (
         comments.map((comment) => {
-          // Get user info - prioritize stored data
           const userName = comment.user_display_name || 
                          comment.profiles?.name || 
                          'Anonymous';
@@ -1623,7 +1662,6 @@ const handleAddComment = useCallback(async (e) => {
                       alt={userName}
                       className="w-10 h-10 rounded-full object-cover"
                       onError={(e) => {
-                        // If image fails to load, show fallback
                         e.target.style.display = 'none';
                         const parent = e.target.parentElement;
                         parent.innerHTML = `

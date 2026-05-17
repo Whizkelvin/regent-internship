@@ -14,6 +14,8 @@ import Message from "./pages/Message";
 import InternshipJobDescription from "./pages/InternshipJobDescription";
 import AdminJobs from "./pages/AdminJobs";
 import MyApplications from "./pages/MyApplication";
+import ESSOfficerDashboard from "./components/ESSOfficerDashboard";
+import CompanyDashboard from "./components/CompanyDashboard";
 
 const App = () => {
   return (
@@ -37,6 +39,23 @@ const App = () => {
         element={
           <ProtectedRoute>
             <InternshipJobs />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ess-officer"
+        element={
+          <ProtectedRoute>
+            <ESSOfficerDashboard/>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/company-dashboard"
+        element={
+          <ProtectedRoute>
+            <CompanyDashboard/>
           </ProtectedRoute>
         }
       />

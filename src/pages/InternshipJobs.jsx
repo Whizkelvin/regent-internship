@@ -246,11 +246,11 @@ const InternshipJobs = () => {
                   onChange={(e) => setFilters({...filters, jobType: e.target.value})}
                   className="w-full p-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-900 focus:border-transparent transition-all duration-300"
                 >
-                  <option value="">All Employment Types</option>
+                
                   <option value="internship">Internship Program</option>
                   <option value="full-time">Full-Time Position</option>
                   <option value="part-time">Part-Time Role</option>
-                  <option value="contract">Contract Basis</option>
+                  
                 </select>
               </div>
 
@@ -281,20 +281,7 @@ const InternshipJobs = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Compensation Range</label>
-                <select
-                  value={filters.salaryRange}
-                  onChange={(e) => setFilters({...filters, salaryRange: e.target.value})}
-                  className="w-full p-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-900 focus:border-transparent transition-all duration-300"
-                >
-                  <option value="">All Compensation Ranges</option>
-                  <option value="0-1000">Up to GHS 1,000</option>
-                  <option value="1000-2000">GHS 1,000 - 2,000</option>
-                  <option value="2000-3000">GHS 2,000 - 3,000</option>
-                  <option value="3000+">GHS 3,000+</option>
-                </select>
-              </div>
+             
             </div>
           </div>
         </div>

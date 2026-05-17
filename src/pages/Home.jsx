@@ -12,12 +12,7 @@ const Home = () => {
   const { session } = useAuth();
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState([]);
-  const [stats, setStats] = useState({
-    companies: 250,
-    internships: 1200,
-    successRate: 98,
-    studentsPlaced: 3500
-  });
+ 
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -172,32 +167,7 @@ const Home = () => {
       </div>
 
       {/* Corporate Statistics */}
-      <div className="py-16 bg-gradient-to-r from-gray-900 to-gray-800 text-white">
-        <div className="max-w-7xl mx-auto px-4 md:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="text-4xl md:text-6xl font-bold mb-2 text-green-400">{stats.companies}+</div>
-              <div className="text-gray-300 font-semibold">Corporate Partners</div>
-              <div className="text-sm text-gray-400 mt-1">Fortune 500 & Industry Leaders</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl md:text-6xl font-bold mb-2 text-blue-400">{stats.internships}+</div>
-              <div className="text-gray-300 font-semibold">Premium Placements</div>
-              <div className="text-sm text-gray-400 mt-1">Executive & Specialist Roles</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl md:text-6xl font-bold mb-2 text-red-400">{stats.successRate}%</div>
-              <div className="text-gray-300 font-semibold">Career Success Rate</div>
-              <div className="text-sm text-gray-400 mt-1">Industry Placement Success</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl md:text-6xl font-bold mb-2 text-purple-400">{stats.studentsPlaced}+</div>
-              <div className="text-gray-300 font-semibold">Alumni Network</div>
-              <div className="text-sm text-gray-400 mt-1">Global Professional Community</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      
 
       {/* Strategic Value Proposition */}
       <div className="py-20 bg-white">

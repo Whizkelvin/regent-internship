@@ -4,25 +4,20 @@ import { supabase } from '../supabaseClient';
 import { 
   FaHome, 
   FaSearch, 
-  FaEdit, 
   FaPaperPlane, 
   FaUserCircle, 
-  FaRegBell, 
-  FaEllipsisV, 
   FaCheckDouble, 
   FaRegCheckCircle, 
   FaClock,
-  FaBuilding,
   FaBriefcase,
-  FaGraduationCap,
-  FaTrash,
+  FaTimes,
   FaArchive,
-  FaFilter,
-  FaSort,
-  FaTimes
+  FaEye,
+  FaBuilding,
+  FaEnvelope
 } from "react-icons/fa";
 import { IoMdArrowBack } from "react-icons/io";
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 
 const Message = () => {
     const navigate = useNavigate();
@@ -35,11 +30,8 @@ const Message = () => {
     const [sendingMessage, setSendingMessage] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filteredConversations, setFilteredConversations] = useState([]);
-    const [showNewMessageModal, setShowNewMessageModal] = useState(false);
-    const [selectedRecipient, setSelectedRecipient] = useState('');
-    const [newMessageText, setNewMessageText] = useState('');
-    const [applications, setApplications] = useState([]);
     const [user, setUser] = useState(null);
+    const [userRole, setUserRole] = useState('applicant');
 
     useEffect(() => {
         fetchUserAndData();
@@ -66,167 +58,205 @@ const Message = () => {
             }
             
             setUser(user);
-            fetchConversations(user);
-            fetchApplications(user);
+            
+            // Get user role from profiles
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+            
+            setUserRole(profile?.role || 'applicant');
+            await fetchConversations(user);
         } catch (error) {
             console.error('Error fetching user:', error);
             navigate('/login');
+        } finally {
+            setLoading(false);
         }
     };
 
-const fetchConversations = async (currentUser) => {
-    try {
-        setLoading(true);
-
-        const { data: applicationsData, error } = await supabase
-            .from('applications')
-            .select(`
-                *,
-                jobs:job_id (*)
-            `)
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        const userRole = currentUser?.user_metadata?.role ?? 'applicant';
-
-        const filteredApplications =
-            userRole === 'applicant'
-                ? applicationsData.filter(app => app.user_id === currentUser.id)
-                : applicationsData;
-
-        const conversationsWithMessages = await Promise.all(
-            filteredApplications.map(async (app) => {
-                const { data: messagesData } = await supabase
-                    .from('application_messages')
-                    .select('*')
-                    .eq('application_id', app.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1);
-
-                const lastMessage = messagesData?.[0] || null;
-                const unreadCount = await getUnreadCount(app.id, currentUser.id);
-
-                return {
-                    id: app.id,
-                    application_id: app.id,
-                    name:
-                        userRole === 'applicant'
-                            ? app.jobs?.company_name || 'Employer'
-                            : 'Applicant',
-                    email: '',
-                    avatar: '',
-                    role: `Applied for: ${app.jobs?.title}`,
-                    job: app.jobs,
-                    lastMessage:
-                        lastMessage?.message ||
-                        'Start a conversation about this application...',
-                    lastMessageTime:
-                        lastMessage?.created_at || app.created_at,
-                    unread: unreadCount,
-                    online: false,
-                    status: app.status,
-                    userRole
-                };
-            })
-        );
-
-        conversationsWithMessages.sort(
-            (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
-        );
-
-        setConversations(conversationsWithMessages);
-        setFilteredConversations(conversationsWithMessages);
-    } catch (error) {
-        console.error('Error fetching conversations:', error);
-    } finally {
-        setLoading(false);
-    }
-};
-
-
- const fetchApplications = async (currentUser) => {
-    try {
-        const { data: applicationsData, error } = await supabase
-            .from('applications')
-            .select(`
-                *,
-                jobs:job_id (*),
-                profiles:user_id (
-                    id,
-                    full_name,
-                    email
-                )
-            `)
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        const userRole = currentUser?.user_metadata?.role ?? 'applicant';
-
-        if (userRole === 'applicant') {
-            setApplications(
-                applicationsData.filter(app => app.user_id === currentUser.id)
-            );
-        } else {
-            setApplications(applicationsData);
-        }
-    } catch (error) {
-        console.error('Error fetching applications:', error);
-        setApplications([]);
-    }
-};
-
-
-    const getUnreadCount = async (applicationId, userId) => {
+    const fetchConversations = async (currentUser) => {
         try {
-            const { count, error } = await supabase
-                .from('application_messages')
-                .select('*', { count: 'exact', head: true })
-                .eq('application_id', applicationId)
-                .eq('is_read', false)
-                .neq('sender_id', userId);
+            setLoading(true);
+            
+            console.log('Fetching conversations for user:', currentUser.id);
+            console.log('User role:', userRole);
 
-            if (error) throw error;
-            return count || 0;
+            // Fetch ALL applications for the current user
+            let query = supabase
+                .from('applications')
+                .select(`
+                    *,
+                    jobs:job_id (*),
+                    profiles:user_id (id, full_name, email, avatar_url)
+                `);
+
+            // For applicant, get their own applications
+            if (userRole === 'applicant') {
+                query = query.eq('user_id', currentUser.id);
+            }
+            // For employer/admin, get applications for their jobs
+
+            const { data: applicationsData, error } = await query.order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('Error fetching applications:', error);
+                throw error;
+            }
+            
+            console.log('Applications found:', applicationsData?.length);
+            console.log('Applications data:', applicationsData);
+
+            if (!applicationsData || applicationsData.length === 0) {
+                console.log('No applications found');
+                setConversations([]);
+                setFilteredConversations([]);
+                setLoading(false);
+                return;
+            }
+
+            // For each application, fetch messages (if any)
+            const conversationsWithMessages = await Promise.all(
+                applicationsData.map(async (app) => {
+                    console.log('Processing application:', app.id);
+                    
+                    // Get messages for this application
+                    const { data: messagesData, error: msgError } = await supabase
+                        .from('application_messages')
+                        .select('*')
+                        .eq('application_id', app.id)
+                        .order('created_at', { ascending: false });
+
+                    if (msgError) {
+                        console.error('Error fetching messages for app:', app.id, msgError);
+                    }
+
+                    console.log(`Messages found for app ${app.id}:`, messagesData?.length || 0);
+
+                    const lastMessage = messagesData?.[0] || null;
+                    
+                    // Count unread messages
+                    const unreadCount = messagesData?.filter(msg => 
+                        !msg.is_read && msg.receiver_id === currentUser.id
+                    ).length || 0;
+
+                    // Determine other party info based on user role
+                    let otherPartyName = '';
+                    let otherPartyEmail = '';
+                    let otherPartyAvatar = '';
+                    
+                    if (userRole === 'applicant') {
+                        // Applicant sees employer/company
+                        otherPartyName = app.jobs?.company || 'Employer';
+                        otherPartyEmail = app.jobs?.company_email || '';
+                        otherPartyAvatar = app.jobs?.company_logo;
+                    } else {
+                        // Employer/Admin sees applicant
+                        otherPartyName = app.profiles?.full_name || 'Applicant';
+                        otherPartyEmail = app.profiles?.email || '';
+                        otherPartyAvatar = app.profiles?.avatar_url;
+                    }
+
+                    // Create conversation object - ALWAYS show the application even without messages
+                    return {
+                        id: app.id,
+                        application_id: app.id,
+                        name: otherPartyName,
+                        email: otherPartyEmail,
+                        avatar: otherPartyAvatar,
+                        role: `Applied for: ${app.jobs?.title || 'Position'}`,
+                        job: app.jobs,
+                        lastMessage: lastMessage?.message || 'No messages yet. Start a conversation...',
+                        lastMessageTime: lastMessage?.created_at || app.created_at,
+                        unread: unreadCount,
+                        status: app.status,
+                        userRole: userRole,
+                        company_logo: app.jobs?.company_logo,
+                        job_image: app.jobs?.job_image,
+                        applicant_name: app.profiles?.full_name,
+                        applicant_email: app.profiles?.email,
+                        created_at: app.created_at
+                    };
+                })
+            );
+
+            // Sort by last message time (most recent first)
+            conversationsWithMessages.sort((a, b) => 
+                new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+            );
+
+            console.log('Total conversations created:', conversationsWithMessages.length);
+            setConversations(conversationsWithMessages);
+            setFilteredConversations(conversationsWithMessages);
+            
         } catch (error) {
-            console.error('Error getting unread count:', error);
-            return 0;
+            console.error('Error fetching conversations:', error);
+            setConversations([]);
+            setFilteredConversations([]);
+        } finally {
+            setLoading(false);
         }
     };
 
     const fetchMessages = async (applicationId) => {
         try {
+            console.log('Fetching messages for application:', applicationId);
+            
             const { data, error } = await supabase
                 .from('application_messages')
                 .select(`
                     *,
-                    sender:profiles!sender_id (full_name, avatar_url),
-                    receiver:profiles!receiver_id (full_name, avatar_url)
+                    sender:sender_id (id, full_name, email),
+                    receiver:receiver_id (id, full_name, email)
                 `)
                 .eq('application_id', applicationId)
                 .order('created_at', { ascending: true });
 
-            if (!error) setMessages(data || []);
+            if (error) throw error;
+            
+            console.log('Messages fetched:', data?.length || 0);
+            
+            // Enhance messages with sender info
+            const enhancedMessages = (data || []).map(msg => ({
+                ...msg,
+                is_current_user: msg.sender_id === user?.id,
+                sender_name: msg.sender?.full_name || 
+                    (msg.sender_id === user?.id ? 'You' : 'Other')
+            }));
+            
+            setMessages(enhancedMessages);
         } catch (error) {
             console.error('Error fetching messages:', error);
+            setMessages([]);
         }
     };
 
     const markMessagesAsRead = async (applicationId) => {
-    if (!user) return;
+        if (!user) return;
 
-    try {
-        await supabase
-            .from('application_messages')
-            .update({ is_read: true })
-            .eq('application_id', applicationId)
-            .neq('sender_id', user.id)
-            .eq('is_read', false);
-    } catch (error) {
-        console.error('Error marking messages as read:', error);
-    }
-};
+        try {
+            const { error } = await supabase
+                .from('application_messages')
+                .update({ is_read: true })
+                .eq('application_id', applicationId)
+                .neq('sender_id', user.id)
+                .eq('is_read', false);
+
+            if (error) throw error;
+            
+            // Update unread count in conversations list
+            setConversations(prev => prev.map(conv => 
+                conv.application_id === applicationId 
+                    ? { ...conv, unread: 0 } 
+                    : conv
+            ));
+            
+        } catch (error) {
+            console.error('Error marking messages as read:', error);
+        }
+    };
+
     const filterConversations = () => {
         if (!searchTerm.trim()) {
             setFilteredConversations(conversations);
@@ -234,145 +264,90 @@ const fetchConversations = async (currentUser) => {
         }
 
         const filtered = conversations.filter(conv =>
-            conv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            conv.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            conv.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            conv.job?.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            conv.status.toLowerCase().includes(searchTerm.toLowerCase())
+            conv.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            conv.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            conv.job?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            conv.status?.toLowerCase().includes(searchTerm.toLowerCase())
         );
 
         setFilteredConversations(filtered);
     };
 
-const handleSendMessage = async (e) => {
-    e.preventDefault();
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
 
-    if (!message.trim() || !activeChat || !user) return;
+        if (!message.trim() || !activeChat || !user) return;
 
-    try {
-        setSendingMessage(true);
+        try {
+            setSendingMessage(true);
 
-        // ✅ SAFELY RESOLVE APPLICATION ID
-        const applicationId = activeChat.application_id || activeChat.id;
+            // Determine receiver_id based on user role
+            let receiverId;
+            
+            if (userRole === 'applicant') {
+                // Get the job owner (employer)
+                const { data: job } = await supabase
+                    .from('jobs')
+                    .select('user_id')
+                    .eq('id', activeChat.job?.id)
+                    .single();
+                receiverId = job?.user_id;
+            } else {
+                // Employer sends to applicant
+                receiverId = activeChat.user_id;
+            }
 
-        if (!applicationId) {
-            throw new Error('Application not found');
-        }
+            if (!receiverId) {
+                // Try to get from the application
+                const { data: application } = await supabase
+                    .from('applications')
+                    .select('user_id')
+                    .eq('id', activeChat.application_id)
+                    .single();
+                receiverId = application?.user_id;
+            }
 
-        // 1️⃣ Fetch application (single source of truth)
-        const { data: application, error } = await supabase
-            .from('applications')
-            .select(`
-                id,
-                user_id,
-                job_id,
-                jobs:job_id ( user_id )
-            `)
-            .eq('id', applicationId)
-            .single();
+            if (!receiverId) {
+                throw new Error('Could not determine recipient');
+            }
 
-        if (error || !application) {
-            throw new Error('Application not found');
-        }
-
-        // 2️⃣ Define admin ID (replace with your real admin user ID)
-        const ADMIN_ID = 'c8a86987-db69-4a56-a9a0-6afc927f7f89'; // <-- replace with your admin's Supabase ID
-
-        // 3️⃣ Send message to admin only
-        const { data: newMessage, error: msgError } = await supabase
-            .from('application_messages')
-            .insert([{
-                application_id: application.id,
-                sender_id: user.id,
-                receiver_id: ADMIN_ID,
-                message: message.trim(),
-                is_read: false
-            }])
-            .select()
-            .single();
-
-        if (msgError) throw msgError;
-
-        // 4️⃣ Update UI
-        setMessages(prev => [...prev, newMessage]);
-        setMessage('');
-        fetchConversations(user);
-
-    } catch (error) {
-        console.error('Error sending message:', error);
-        alert(error.message);
-    } finally {
-        setSendingMessage(false);
-    }
-};
-
-
-  const handleStartNewConversation = async (e) => {
-    e.preventDefault();
-    if (!selectedRecipient || !newMessageText.trim() || !user) return;
-
-    try {
-        // selectedRecipient is ALWAYS application.id
-        const application = applications.find(
-            app => app.id === selectedRecipient
-        );
-
-        if (!application) {
-            alert('No application found');
-            return;
-        }
-
-        const userRole = user?.user_metadata?.role ?? 'applicant';
-        let receiverId;
-
-        if (userRole === 'applicant') {
-            const { data: job, error } = await supabase
-                .from('jobs')
-                .select('user_id')
-                .eq('id', application.job_id)
+            // Send message
+            const { data: newMessage, error: msgError } = await supabase
+                .from('application_messages')
+                .insert([{
+                    application_id: activeChat.application_id,
+                    sender_id: user.id,
+                    receiver_id: receiverId,
+                    message: message.trim(),
+                    is_read: false,
+                    created_at: new Date().toISOString()
+                }])
+                .select()
                 .single();
 
-            if (error) throw error;
-            receiverId = job.user_id;
-        } else {
-            receiverId = application.user_id;
+            if (msgError) throw msgError;
+
+            // Add sender info to message
+            const enhancedMessage = {
+                ...newMessage,
+                is_current_user: true,
+                sender_name: 'You'
+            };
+
+            // Update UI
+            setMessages(prev => [...prev, enhancedMessage]);
+            setMessage('');
+            
+            // Refresh conversations to update last message
+            await fetchConversations(user);
+
+        } catch (error) {
+            console.error('Error sending message:', error);
+            alert(error.message || 'Failed to send message');
+        } finally {
+            setSendingMessage(false);
         }
-
-        const { error } = await supabase
-            .from('application_messages')
-            .insert([{
-                application_id: application.id,
-                sender_id: user.id,
-                receiver_id: receiverId,
-                message: newMessageText.trim(),
-                is_read: false
-            }]);
-
-        if (error) throw error;
-
-        setSelectedRecipient('');
-        setNewMessageText('');
-        setShowNewMessageModal(false);
-
-        await fetchConversations(user);
-
-        setActiveChat({
-            application_id: application.id,
-            name: userRole === 'applicant'
-                ? application.jobs?.company_name
-                : application.profiles?.full_name,
-            role: `Applied for: ${application.jobs?.title}`,
-            job: application.jobs,
-            status: application.status,
-            email: application.profiles?.email
-        });
-
-    } catch (error) {
-        console.error('Error starting new conversation:', error);
-        alert('Error sending message');
-    }
-};
-
+    };
 
     const getStatusColor = (status) => {
         const colors = {
@@ -419,88 +394,7 @@ const handleSendMessage = async (e) => {
         }
     };
 
-    const NewMessageModal = () => {
-        const userRole = user?.user_metadata?.role || 'applicant';
-        
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full">
-                    <div className="p-6">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-gray-900">New Message</h3>
-                            <button
-                                onClick={() => setShowNewMessageModal(false)}
-                                className="text-gray-400 hover:text-gray-600"
-                            >
-                                <FaTimes className="w-6 h-6" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleStartNewConversation}>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        {userRole === 'applicant' ? 'Select Job Application' : 'Select Applicant'}
-                                    </label>
-                                    <select
-                                        value={selectedRecipient}
-                                        onChange={(e) => setSelectedRecipient(e.target.value)}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
-                                        required
-                                    >
-                                        <option value="">Choose {userRole === 'applicant' ? 'a job application' : 'an applicant'}</option>
-                                        {applications.map((app) => (
-                                            <option 
-                                                key={app.id} 
-                                                value={userRole === 'applicant' ? app.id : app.user_id}
-                                            >
-                                                {userRole === 'applicant' 
-                                                    ? `${app.jobs?.title} at ${app.jobs?.company_name} (${app.status})`
-                                                    : `${app.profiles?.full_name || 'Unknown'} - ${app.jobs?.title} (${app.status})`
-                                                }
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Message
-                                    </label>
-                                    <textarea
-                                        value={newMessageText}
-                                        onChange={(e) => setNewMessageText(e.target.value)}
-                                        rows="4"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent resize-none"
-                                        placeholder="Type your message..."
-                                        required
-                                    />
-                                </div>
-
-                                <div className="flex justify-end space-x-3 pt-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowNewMessageModal(false)}
-                                        className="px-4 py-2 text-gray-600 hover:text-gray-900"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="px-6 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800 font-medium"
-                                    >
-                                        Send Message
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    if (loading && !activeChat) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
                 <div className="text-center">
@@ -523,11 +417,10 @@ const handleSendMessage = async (e) => {
                         <IoMdArrowBack className="text-xl" />
                     </button>
                     <div>
-                        <p className="text-white font-semibold text-lg">Notification</p>
-                        <p className="text-green-200 text-xs">Stay connected</p>
+                        <p className="text-white font-semibold text-lg">Messages</p>
+                        <p className="text-green-200 text-xs">Application Updates</p>
                     </div>
                 </div>
-               
             </div>
 
             {/* Desktop Header */}
@@ -542,11 +435,10 @@ const handleSendMessage = async (e) => {
                         <p className="text-2xl font-bold text-gray-900">
                             Regent <span className="text-green-950">Hub</span>
                         </p>
-                        <p className="text-gray-600 text-sm">Notification  Messages</p>
+                        <p className="text-gray-600 text-sm">Application Messages</p>
                     </div>
                 </div>
                 <div className="flex items-center space-x-4">
-                   
                     <button
                         onClick={() => navigate("/home")}
                         className="bg-gradient-to-r from-green-950 to-green-800 hover:from-green-800 hover:to-green-700 text-white px-6 py-2 rounded-xl font-semibold transition-all duration-300 hover:scale-105 flex items-center space-x-2"
@@ -566,28 +458,37 @@ const handleSendMessage = async (e) => {
                             <FaSearch className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
                             <input
                                 type="text"
-                                placeholder="Search conversations..."
+                                placeholder="Search by job title, company, or status..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full pl-10 pr-4 py-2 bg-gray-100 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-green-900 focus:border-transparent"
                             />
                         </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                            {conversations.length} application(s) found
+                        </p>
                     </div>
 
                     {/* Conversations List */}
                     <div className="flex-1 overflow-y-auto">
-                        {filteredConversations.length === 0 ? (
+                        {conversations.length === 0 ? (
                             <div className="p-8 text-center">
                                 <FaUserCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                <p className="text-gray-500">No conversations found</p>
+                                <p className="text-gray-500">No applications found</p>
                                 <p className="text-gray-400 text-sm mt-2">
-                                    {user?.user_metadata?.role === 'applicant' 
-                                        ? 'You have no job applications yet.' 
-                                        : 'No applicants have messaged yet.'}
+                                    {userRole === 'applicant' 
+                                        ? 'Apply for jobs to start conversations with employers.' 
+                                        : 'No applications have been submitted yet.'}
                                 </p>
+                                <button
+                                    onClick={() => navigate('/jobs')}
+                                    className="mt-4 px-4 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800"
+                                >
+                                    Browse Jobs
+                                </button>
                             </div>
                         ) : (
-                            filteredConversations.map((conversation) => (
+                            conversations.map((conversation) => (
                                 <div
                                     key={conversation.id}
                                     onClick={() => setActiveChat(conversation)}
@@ -599,20 +500,23 @@ const handleSendMessage = async (e) => {
                                 >
                                     <div className="flex items-start space-x-3">
                                         <div className="relative">
-                                            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-100 to-green-50 flex items-center justify-center">
+                                            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-100 to-green-50 flex items-center justify-center overflow-hidden">
                                                 {conversation.avatar ? (
                                                     <img
                                                         src={conversation.avatar}
                                                         alt={conversation.name}
-                                                        className="w-full h-full rounded-full object-cover"
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                ) : conversation.company_logo ? (
+                                                    <img
+                                                        src={conversation.company_logo}
+                                                        alt={conversation.name}
+                                                        className="w-full h-full object-cover"
                                                     />
                                                 ) : (
-                                                    <FaUserCircle className="w-6 h-6 text-green-900" />
+                                                    <FaBuilding className="w-6 h-6 text-green-900" />
                                                 )}
                                             </div>
-                                            {conversation.online && (
-                                                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
-                                            )}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between">
@@ -632,7 +536,7 @@ const handleSendMessage = async (e) => {
                                             </div>
                                             <p className="text-sm text-gray-600 truncate">{conversation.role}</p>
                                             
-                                            {/* Status Badge - Shows application status */}
+                                            {/* Status Badge */}
                                             <div className="flex items-center space-x-2 mt-1">
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(conversation.status)}`}>
                                                     {React.createElement(getStatusIcon(conversation.status), { className: "w-3 h-3 mr-1" })}
@@ -668,15 +572,21 @@ const handleSendMessage = async (e) => {
                                             <IoMdArrowBack className="w-5 h-5" />
                                         </button>
                                         <div className="relative">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-100 to-green-50 flex items-center justify-center">
+                                            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-100 to-green-50 flex items-center justify-center overflow-hidden">
                                                 {activeChat.avatar ? (
                                                     <img
                                                         src={activeChat.avatar}
                                                         alt={activeChat.name}
-                                                        className="w-full h-full rounded-full object-cover"
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                ) : activeChat.company_logo ? (
+                                                    <img
+                                                        src={activeChat.company_logo}
+                                                        alt={activeChat.name}
+                                                        className="w-full h-full object-cover"
                                                     />
                                                 ) : (
-                                                    <FaUserCircle className="w-5 h-5 text-green-900" />
+                                                    <FaBuilding className="w-6 h-6 text-green-900" />
                                                 )}
                                             </div>
                                         </div>
@@ -685,20 +595,19 @@ const handleSendMessage = async (e) => {
                                             <p className="text-sm text-gray-600">{activeChat.role}</p>
                                             <div className="flex items-center space-x-2 mt-1">
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(activeChat.status)}`}>
-                                                    <span className="mr-1">Application Status:</span> {activeChat.status}
-                                                </span>
-                                                <span className="text-xs text-gray-500">
-                                                    {activeChat.email}
+                                                    {React.createElement(getStatusIcon(activeChat.status), { className: "w-3 h-3 mr-1" })}
+                                                    Status: {activeChat.status}
                                                 </span>
                                             </div>
                                         </div>
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         <button
-                                            onClick={() => navigate(`/whistlist`)}
-                                            className="text-green-900 hover:text-green-800 font-medium text-sm"
+                                            onClick={() => navigate(`/job/${activeChat.job?.id}`)}
+                                            className="text-green-900 hover:text-green-800 font-medium text-sm flex items-center space-x-1"
                                         >
-                                            View Application
+                                            <FaEye className="w-4 h-4" />
+                                            <span>View Job</span>
                                         </button>
                                     </div>
                                 </div>
@@ -707,24 +616,34 @@ const handleSendMessage = async (e) => {
                             {/* Messages */}
                             <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
                                 {messages.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-full  text-center">
-                                       
+                                    <div className="flex flex-col items-center justify-center h-full text-center">
+                                        <div className="w-20 h-20 bg-gradient-to-r from-green-100 to-green-50 rounded-full flex items-center justify-center mb-4">
+                                            <FaEnvelope className="w-10 h-10 text-green-900" />
+                                        </div>
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                            No messages yet
+                                        </h3>
                                         <p className="text-gray-600 max-w-md">
-                                            Know more about your {activeChat.job?.title} application.
+                                            Start a conversation about your application for:
                                         </p>
-                                        <p className="text-gray-600 max-w-md">
-                                             {activeChat.job?.description} 
+                                        <p className="font-semibold text-green-900 mt-2">
+                                            {activeChat.job?.title} at {activeChat.job?.company}
                                         </p>
-
-                                        <img
-                                        className="text-gray-600 max-w-md w-83 h-64 mt-4 rounded-lg shadow-md lg:w-96 lg:h-92"
-                                        src={activeChat.job?.job_image} />
-                                       
+                                        <p className="text-gray-500 text-sm mt-4 max-w-md">
+                                            Send a message to the employer to ask questions or get updates about your application.
+                                        </p>
+                                        {activeChat.job?.job_image && (
+                                            <img
+                                                className="mt-6 rounded-lg shadow-md w-64 h-48 object-cover"
+                                                src={activeChat.job.job_image}
+                                                alt={activeChat.job.title}
+                                            />
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
                                         {messages.map((msg) => {
-                                            const isMe = msg.sender_id === user?.id;
+                                            const isMe = msg.is_current_user;
                                             
                                             return (
                                                 <div
@@ -740,10 +659,10 @@ const handleSendMessage = async (e) => {
                                                     >
                                                         {!isMe && (
                                                             <p className="text-xs font-medium text-gray-700 mb-1">
-                                                                {msg.sender?.full_name || 'Unknown'}
+                                                                {msg.sender_name || activeChat.name}
                                                             </p>
                                                         )}
-                                                        <p className="text-sm">{msg.message}</p>
+                                                        <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
                                                         <div className={`flex items-center justify-end space-x-1 mt-1 text-xs ${
                                                             isMe ? 'text-green-200' : 'text-gray-500'
                                                         }`}>
@@ -767,35 +686,46 @@ const handleSendMessage = async (e) => {
                             {/* Message Input */}
                             <div className="p-4 border-t border-gray-200 bg-white">
                                 <form onSubmit={handleSendMessage} className="flex items-center space-x-3">
-                  
+                                    <input
+                                        type="text"
+                                        value={message}
+                                        onChange={(e) => setMessage(e.target.value)}
+                                        placeholder="Type your message..."
+                                        className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-900 focus:border-transparent"
+                                        disabled={sendingMessage}
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={!message.trim() || sendingMessage}
+                                        className="bg-gradient-to-r from-green-900 to-green-800 text-white px-6 py-3 rounded-xl hover:from-green-800 hover:to-green-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <FaPaperPlane className="w-5 h-5" />
+                                    </button>
                                 </form>
-                                <div className="mt-2 text-xs text-gray-500 text-center">
-                                    Application status: <span className={`font-medium ${getStatusColor(activeChat.status)} px-2 py-1 rounded`}>
-                                        {activeChat.status}
-                                    </span>
-                                </div>
+                                <p className="text-xs text-gray-500 text-center mt-2">
+                                    Your message will be sent to {activeChat.name}
+                                </p>
                             </div>
                         </>
                     ) : (
-                        /* Empty State */
+                        /* Empty State - No Chat Selected */
                         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
                             <div className="w-24 h-24 bg-gradient-to-r from-green-100 to-green-50 rounded-full flex items-center justify-center mb-6">
                                 <FaPaperPlane className="w-12 h-12 text-green-900" />
                             </div>
-                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Notification Messages</h3>
+                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Your Messages</h3>
                             <p className="text-gray-600 mb-6 max-w-md">
-                                {user?.user_metadata?.role === 'applicant'
-                                    ? 'Communicate with employers about your job applications. Message them for updates, questions, or follow-ups.'
-                                    : 'Communicate with job applicants about their applications. Send updates, ask questions, or provide feedback.'}
+                                Select an application from the sidebar to view or send messages
                             </p>
-                            
+                            <div className="text-sm text-gray-500 space-y-2">
+                                <p>💬 Communicate with employers about your applications</p>
+                                <p>📝 Get updates on your application status</p>
+                                <p>✅ Receive interview invitations and offers</p>
+                            </div>
                         </div>
                     )}
                 </div>
             </div>
-
-            {/* New Message Modal */}
-            {showNewMessageModal && <NewMessageModal />}
         </div>
     );
 }

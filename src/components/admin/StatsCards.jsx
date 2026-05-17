@@ -7,25 +7,25 @@ const StatsCards = ({ stats }) => {
       label: 'Total Jobs', 
       value: stats.total, 
       icon: FaBriefcase, 
-      color: 'from-blue-500 to-cyan-500'
+      color: 'from-black to-black'
     },
     { 
       label: 'Active Applications', 
       value: stats.pendingApplications, 
       icon: FaClipboardCheck, 
-      color: 'from-amber-500 to-orange-500'
+      color: 'from-black to-black'
     },
     { 
       label: 'Total Users', 
       value: stats.users, 
       icon: FaUsers, 
-      color: 'from-purple-500 to-pink-500'
+      color: 'from-black to-black'
     },
     { 
       label: 'Unread Messages', 
       value: stats.unreadMessages, 
       icon: FaInbox, 
-      color: 'from-rose-500 to-red-500'
+      color: 'from-black to-black'
     }
   ];
 

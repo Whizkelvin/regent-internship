@@ -338,7 +338,7 @@ const MessagesTab = ({
                 }
               }}
               disabled={loading}
-              className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium transition-all duration-300 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center space-x-2 px-4 py-2.5 bg-white text-black rounded-xl font-medium transition-all duration-300 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FaSync className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               <span>{loading ? 'Loading...' : 'Refresh Messages'}</span>
@@ -356,7 +356,7 @@ const MessagesTab = ({
               <p className="text-2xl font-bold text-gray-900">{localMessages.length}</p>
             </div>
             <div className="p-2 bg-purple-50 rounded-lg">
-              <FaInbox className="w-6 h-6 text-purple-500" />
+              <FaInbox className="w-6 h-6 text-black" />
             </div>
           </div>
         </div>
@@ -365,12 +365,12 @@ const MessagesTab = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Unread</p>
-              <p className="text-2xl font-bold text-red-600">
+              <p className="text-2xl font-bold text-black">
                 {localMessages.filter(msg => !msg.is_read).length}
               </p>
             </div>
             <div className="p-2 bg-red-50 rounded-lg">
-              <FaBell className="w-6 h-6 text-red-500" />
+              <FaBell className="w-6 h-6 text-black" />
             </div>
           </div>
         </div>
@@ -384,7 +384,7 @@ const MessagesTab = ({
               </p>
             </div>
             <div className="p-2 bg-blue-50 rounded-lg">
-              <FaUserFriends className="w-6 h-6 text-blue-500" />
+              <FaUserFriends className="w-6 h-6 text-black" />
             </div>
           </div>
         </div>
@@ -393,12 +393,12 @@ const MessagesTab = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">From Admin</p>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-2xl font-bold text-black">
                 {localMessages.filter(m => isFromAdmin(m)).length}
               </p>
             </div>
             <div className="p-2 bg-green-50 rounded-lg">
-              <FaShieldAlt className="w-6 h-6 text-green-500" />
+              <FaShieldAlt className="w-6 h-6 text-black" />
             </div>
           </div>
         </div>
@@ -426,7 +426,7 @@ const MessagesTab = ({
                 setLocalMessages(applicationMessages);
               }
             }}
-            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-300"
+            className="px-6 py-3 bg-white text-black rounded-xl font-medium hover:shadow-lg transition-all duration-300"
           >
             Refresh Messages
           </button>
@@ -477,12 +477,12 @@ const MessagesTab = ({
                         <div className="flex items-center space-x-3">
                           <div className="flex-shrink-0">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              isAdminMessage ? 'bg-green-100' : 'bg-purple-100'
+                              isAdminMessage ? '' : 'bg-purple-100'
                             }`}>
                               {isAdminMessage ? (
-                                <FaShieldAlt className="w-5 h-5 text-green-600" />
+                                <FaShieldAlt className="w-5 h-5 text-black" />
                               ) : (
-                                <FaUser className="w-5 h-5 text-purple-600" />
+                                <FaUser className="w-5 h-5 text-black" />
                               )}
                             </div>
                           </div>
@@ -555,7 +555,7 @@ const MessagesTab = ({
                             <button
                               onClick={() => handleReply(msg)}
                               disabled={!senderEmail || senderEmail === 'No email' || isLoading || isDeleting}
-                              className={`text-purple-600 hover:text-purple-900 p-1 ${(!senderEmail || senderEmail === 'No email' || isLoading || isDeleting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              className={`text-black hover:text-purple-900 p-1 ${(!senderEmail || senderEmail === 'No email' || isLoading || isDeleting) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               title={senderEmail && senderEmail !== 'No email' ? "Reply" : "No email address"}
                               aria-label="Reply to message"
                             >
@@ -579,7 +579,7 @@ const MessagesTab = ({
                             <button
                               onClick={() => !isLoading && handleMarkAsRead(msg.id)}
                               disabled={isLoading || isDeleting}
-                              className={`text-green-600 hover:text-green-900 p-1 ${(isLoading || isDeleting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              className={`text-black hover:text-green-900 p-1 ${(isLoading || isDeleting) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               title={isLoading ? 'Processing...' : 'Mark as Read'}
                               aria-label="Mark message as read"
                             >
@@ -625,7 +625,7 @@ const MessagesTab = ({
                     const csvContent = convertToCSV(localMessages);
                     downloadCSV(csvContent, 'messages_export.csv');
                   }}
-                  className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 rounded-lg hover:shadow-sm transition-all duration-300"
+                  className="flex items-center space-x-2 px-4 py-2 bg-white text-black border rounded-lg hover:shadow-sm transition-all duration-300"
                 >
                   <FaDownload className="w-4 h-4" />
                   <span>Export CSV</span>
@@ -641,7 +641,7 @@ const MessagesTab = ({
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
           <div className="flex items-start space-x-3">
             <div className="p-3 bg-green-100 rounded-lg">
-              <FaPaperPlane className="w-6 h-6 text-green-600" />
+              <FaPaperPlane className="w-6 h-6 text-black" />
             </div>
             <div>
               <h4 className="font-semibold text-gray-900 mb-2">Quick Reply</h4>
@@ -685,7 +685,7 @@ const MessagesTab = ({
         <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
           <div className="flex items-start space-x-3">
             <div className="p-3 bg-purple-100 rounded-lg">
-              <FaDownload className="w-6 h-6 text-purple-600" />
+              <FaDownload className="w-6 h-6 text-black" />
             </div>
             <div>
               <h4 className="font-semibold text-gray-900 mb-2">Export Messages</h4>

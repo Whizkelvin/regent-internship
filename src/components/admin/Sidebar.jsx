@@ -69,10 +69,7 @@ const Sidebar = ({
               <span>Add New Job</span>
             </button>
             
-            <button className="flex items-center space-x-3 w-full p-4 rounded-xl hover:bg-white/10 transition-all duration-300 group">
-              <FaDownload className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span>Export Data</span>
-            </button>
+      
 
             <button
               onClick={handleSignOut}

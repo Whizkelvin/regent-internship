@@ -64,7 +64,7 @@ const ForgotPassword = () => {
                       className="w-20 h-20 mb-4"
                     />
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">Reset Password</h1>
-                    <p className="text-gray-600">Regent Hub Job Placement System</p>
+                    <p className="text-gray-600">Regent Hub Internship System</p>
                   </div>
                   <div className="w-24 h-1 bg-gradient-to-r from-green-950 to-red-950 rounded-full mx-auto"></div>
                 </div>

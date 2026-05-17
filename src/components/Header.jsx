@@ -21,7 +21,7 @@ const Header = () => {
 
   const navItems = [
     { name: "Home", path: "/home", icon: <FaHome className="w-4 h-4" /> },
-    { name: "Internship Jobs", path: "/jobs", icon: <FaBriefcase className="w-4 h-4" /> },
+    { name: "Internships", path: "/jobs", icon: <FaBriefcase className="w-4 h-4" /> },
     { name: "Contact", path: "/contact", icon: <FaEnvelope className="w-4 h-4" /> },
     { name: "About Us", path: "/about-us", icon: <FaUserCircle className="w-4 h-4" /> },
   ];

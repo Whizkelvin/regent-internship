@@ -15,12 +15,15 @@ const MessageModal = ({
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="bg-gradient-to-r from-purple-900 to-pink-800 p-6">
+        <div className="bg-gradient-to-r from-green-900 to-green-800 p-6">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-xl font-bold text-white">Send Message</h3>
-              <p className="text-purple-200 text-sm mt-1">
-                To: {selectedApplication.full_name || selectedApplication.email}
+              <h3 className="text-xl font-bold text-white">Send Message to Applicant</h3>
+              <p className="text-green-200 text-sm mt-1">
+                Application: {selectedApplication.jobs?.title || 'Unknown Job'}
+              </p>
+              <p className="text-green-200 text-sm">
+                To: {selectedApplication.full_name || selectedApplication.profiles?.full_name || selectedApplication.email}
               </p>
             </div>
             <button
@@ -42,12 +45,12 @@ const MessageModal = ({
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               rows="6"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-100 focus:border-purple-500 transition-all duration-300 resize-none"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-100 focus:border-green-500 transition-all duration-300 resize-none"
               placeholder="Type your message here..."
               onKeyDown={(e) => e.stopPropagation()}
             />
             <p className="text-xs text-gray-500 mt-2">
-              This message will be sent to the applicant's email and stored in their application history.
+              This message will be sent to the applicant and stored in their application history.
             </p>
           </div>
 
@@ -61,7 +64,7 @@ const MessageModal = ({
             <button
               onClick={sendMessageToApplicant}
               disabled={!message.trim() || sendingMessage}
-              className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-medium transition-all duration-300 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-2.5 bg-gradient-to-r from-green-900 to-green-800 hover:from-green-800 hover:to-green-700 text-white rounded-xl font-medium transition-all duration-300 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sendingMessage ? (
                 <>
