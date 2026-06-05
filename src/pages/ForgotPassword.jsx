@@ -18,7 +18,7 @@ const ForgotPassword = () => {
     setLoading(true);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://regent-internship.vercel.app/updatepassword",
+      redirectTo: "https://regenthub.vercel.app/updatepassword",
     });
 
     if (error) {

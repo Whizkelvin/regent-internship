@@ -110,126 +110,196 @@ const CompanyDashboard = () => {
     filterApplications();
   }, [applicationSearchTerm, statusFilter, applications]);
 
-  const checkUserAndFetchData = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-      
-       const handleSignOut = async () => {
+   const handleSignOut = async () => {
           await supabase.auth.signOut();
           navigate('/');
         };
-        
-      // Check if user has company role
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, company_name, company_id')
-        .eq('id', user.id)
-        .single();
+
+const checkUserAndFetchData = async () => {
+  try {
+    setLoading(true);
+    
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      console.error('Auth error:', userError);
+      navigate('/login');
+      return;
+    }
+    
+    console.log('User ID:', user.id);
+    
+    // Select ONLY columns that exist in your table
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, role, company_name, email, full_name, phone, avatar_url') // Removed company_id
+      .eq('id', user.id)
+      .maybeSingle();
+    
+    console.log('Profile data:', profile);
+    
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      alert('Error fetching profile: ' + profileError.message);
+      navigate('/unauthorized');
+      return;
+    }
+    
+    if (!profile) {
+      console.log('No profile found, creating one...');
       
-      if (profile?.role !== 'company' && profile?.role !== 'admin') {
+      // Create profile with columns that exist
+      const newProfile = {
+        id: user.id,
+        email: user.email,
+        role: 'company',
+        company_name: 'Your Company Name', // You might want to get this from registration
+        full_name: user.user_metadata?.full_name || '',
+        created_at: new Date().toISOString(),
+        status: 'active',
+        email_confirmed: false
+      };
+      
+      const { data: createdProfile, error: insertError } = await supabase
+        .from('profiles')
+        .insert([newProfile])
+        .select('id, role, company_name, email, full_name')
+        .maybeSingle();
+      
+      if (insertError) {
+        console.error('Error creating profile:', insertError);
+        alert('Error creating profile: ' + insertError.message);
         navigate('/unauthorized');
         return;
       }
       
+      console.log('Profile created:', createdProfile);
+      setCompanyProfile(createdProfile);
+      setUser(user);
+      await fetchJobs();
+      await fetchApplications();
+      setLoading(false);
+      return;
+    }
+    
+    // Check if user has company or admin role
+    if (profile.role === 'company' || profile.role === 'admin') {
       setUser(user);
       setCompanyProfile(profile);
       await fetchJobs();
       await fetchApplications();
-    } catch (error) {
-      console.error('Error checking user:', error);
-      navigate('/login');
-    } finally {
-      setLoading(false);
+    } else {
+      console.error('Invalid role:', profile.role);
+      alert(`Access denied. Your role is "${profile.role}". Company access required.`);
+      navigate('/unauthorized');
+      return;
     }
-  };
+    
+  } catch (error) {
+    console.error('Error in checkUserAndFetchData:', error);
+    alert('Error loading dashboard: ' + error.message);
+    navigate('/login');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchJobs = async () => {
-    try {
-      let query = supabase
-        .from('jobs')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      // If not admin, only show company's jobs
-      if (companyProfile?.role !== 'admin') {
-        query = query.eq('company', companyProfile?.company_name);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      setJobs(data || []);
-      setFilteredJobs(data || []);
-      
-      // Update stats
-      setStats(prev => ({
-        ...prev,
-        totalJobs: data?.length || 0,
-        activeJobs: data?.filter(job => job.is_active).length || 0
-      }));
-    } catch (error) {
+  try {
+    let query = supabase
+      .from('jobs')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    // If not admin, only show company's jobs using company_name
+    if (companyProfile?.role !== 'admin' && companyProfile?.company_name) {
+      query = query.eq('company', companyProfile.company_name);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) {
       console.error('Error fetching jobs:', error);
       alert('Error fetching jobs: ' + error.message);
+      return;
     }
-  };
+    
+    console.log('Jobs fetched:', data);
+    setJobs(data || []);
+    setFilteredJobs(data || []);
+    
+    // Update stats
+    setStats(prev => ({
+      ...prev,
+      totalJobs: data?.length || 0,
+      activeJobs: data?.filter(job => job.is_active).length || 0
+    }));
+  } catch (error) {
+    console.error('Error in fetchJobs:', error);
+    alert('Error fetching jobs: ' + error.message);
+  }
+};
 
   const fetchApplications = async () => {
-    try {
-      // First get all jobs for this company
-      const { data: companyJobs } = await supabase
-        .from('jobs')
-        .select('id')
-        .eq('company', companyProfile?.company_name);
-      
-      const jobIds = companyJobs?.map(job => job.id) || [];
-      
-      if (jobIds.length === 0) {
-        setApplications([]);
-        setFilteredApplications([]);
-        return;
-      }
-      
-      // Get applications for these jobs
-      const { data, error } = await supabase
-        .from('applications')
-        .select(`
-          *,
-          jobs:job_id (*),
-          profiles:user_id (id, full_name, email, avatar_url, phone)
-        `)
-        .in('job_id', jobIds)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      setApplications(data || []);
-      setFilteredApplications(data || []);
-      
-      // Update stats
-      const pending = data?.filter(app => app.status === 'pending').length || 0;
-      const reviewed = data?.filter(app => app.status === 'reviewed').length || 0;
-      const shortlisted = data?.filter(app => app.status === 'shortlisted').length || 0;
-      const hired = data?.filter(app => app.status === 'accepted').length || 0;
-      
-      setStats(prev => ({
-        ...prev,
-        totalApplications: data?.length || 0,
-        pendingApplications: pending,
-        reviewedApplications: reviewed,
-        shortlistedApplications: shortlisted,
-        hiredApplications: hired
-      }));
-    } catch (error) {
-      console.error('Error fetching applications:', error);
-      alert('Error fetching applications: ' + error.message);
+  try {
+    // First get all jobs for this company using company_name
+    const { data: companyJobs, error: jobsError } = await supabase
+      .from('jobs')
+      .select('id')
+      .eq('company', companyProfile?.company_name);
+    
+    if (jobsError) {
+      console.error('Error fetching company jobs:', jobsError);
+      return;
     }
-  };
+    
+    const jobIds = companyJobs?.map(job => job.id) || [];
+    
+    if (jobIds.length === 0) {
+      setApplications([]);
+      setFilteredApplications([]);
+      return;
+    }
+    
+    // Get applications for these jobs
+    const { data, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        jobs:job_id (*),
+        profiles:user_id (id, full_name, email, avatar_url, phone)
+      `)
+      .in('job_id', jobIds)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching applications:', error);
+      return;
+    }
+    
+    console.log('Applications fetched:', data);
+    setApplications(data || []);
+    setFilteredApplications(data || []);
+    
+    // Update stats
+    const pending = data?.filter(app => app.status === 'pending').length || 0;
+    const reviewed = data?.filter(app => app.status === 'reviewed').length || 0;
+    const shortlisted = data?.filter(app => app.status === 'shortlisted').length || 0;
+    const hired = data?.filter(app => app.status === 'accepted').length || 0;
+    
+    setStats(prev => ({
+      ...prev,
+      totalApplications: data?.length || 0,
+      pendingApplications: pending,
+      reviewedApplications: reviewed,
+      shortlistedApplications: shortlisted,
+      hiredApplications: hired
+    }));
+  } catch (error) {
+    console.error('Error fetching applications:', error);
+    alert('Error fetching applications: ' + error.message);
+  }
+};
 
   const filterJobs = () => {
     if (!jobSearchTerm.trim()) {
@@ -264,44 +334,31 @@ const CompanyDashboard = () => {
     setFilteredApplications(filtered);
   };
 
-  const handleCreateJob = async (e) => {
-    e.preventDefault();
+ 
+const handleCreateJob = async (e) => {
+  e.preventDefault();
+  
+  try {
+    const { error } = await supabase
+      .from('jobs')
+      .insert([{
+        ...newJob,
+        company: companyProfile?.company_name, // Use company_name
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }]);
     
-    try {
-      const { error } = await supabase
-        .from('jobs')
-        .insert([{
-          ...newJob,
-          company: companyProfile?.company_name, // Use company's name
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }]);
-      
-      if (error) throw error;
-      
-      setShowCreateJobModal(false);
-      setNewJob({
-        title: '',
-        company: companyProfile?.company_name || '',
-        company_logo: '',
-        job_image: '',
-        location: '',
-        job_type: 'full-time',
-        category: 'Technology',
-        description: '',
-        requirements: '',
-        salary_range: '',
-        deadline: '',
-        is_active: true
-      });
-      
-      await fetchJobs();
-      alert('Job created successfully!');
-    } catch (error) {
-      console.error('Error creating job:', error);
-      alert('Error creating job: ' + error.message);
-    }
-  };
+    if (error) throw error;
+    
+    setShowCreateJobModal(false);
+    // Reset form...
+    await fetchJobs();
+    alert('Job created successfully!');
+  } catch (error) {
+    console.error('Error creating job:', error);
+    alert('Error creating job: ' + error.message);
+  }
+};
 
   const handleUpdateJob = async (e) => {
     e.preventDefault();
