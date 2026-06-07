@@ -36,7 +36,12 @@ import {
   FaRegCheckCircle,
   FaUserCircle,
   FaArrowLeft,
-  FaShieldAlt
+  FaShieldAlt,
+  FaFilePdf,
+  FaFileWord,
+  FaFileSignature,
+  FaAward,
+  FaExternalLinkAlt
 } from 'react-icons/fa';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -166,10 +171,8 @@ const ESSOfficerDashboard = () => {
         return;
       }
       
-      // Get current admin/ESS user ID
       setAdminUserId(user.id);
       
-      // Check if user has ESS Officer role
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -520,7 +523,6 @@ const ESSOfficerDashboard = () => {
       let receiverId = selectedMessage.sender_id;
       let applicationId = selectedMessage.application_id;
       
-      // If no application_id, find related application
       if (!applicationId && selectedMessage.email) {
         const { data: application } = await supabase
           .from('applications')
@@ -642,6 +644,35 @@ const ESSOfficerDashboard = () => {
       setUploading(false);
       setUploadType('');
     }
+  };
+
+  const handleDownloadFile = async (url, fileName) => {
+    if (!url) {
+      alert('No file available');
+      return;
+    }
+    
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      alert('Failed to download file');
+    }
+  };
+
+  const getFileIcon = (url) => {
+    if (!url) return null;
+    if (url.includes('.pdf')) return <FaFilePdf className="text-red-500" />;
+    return <FaFileWord className="text-blue-500" />;
   };
 
   const getStatusColor = (status) => {
@@ -803,7 +834,7 @@ const ESSOfficerDashboard = () => {
                     }`}>
                       {msg.sender_id === adminUserId ? 
                         <FaShieldAlt className="w-5 h-5 text-green-900" /> : 
-                        ""
+                        <FaUser className="w-5 h-5 text-purple-900" />
                       }
                     </div>
                   </div>
@@ -1102,7 +1133,7 @@ const ESSOfficerDashboard = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Manage Applications</h2>
-          <p className="text-gray-600">Review and process job applications</p>
+          <p className="text-gray-600">Review and process job applications with documents</p>
         </div>
         <div className="flex space-x-3">
           <div className="relative">
@@ -1146,93 +1177,140 @@ const ESSOfficerDashboard = () => {
           <p className="text-gray-600">Applications will appear here when candidates apply</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applicant</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applied Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredApplications.map((app) => (
-                  <tr key={app.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
+        <div className="space-y-4">
+          {filteredApplications.map((app) => (
+            <div key={app.id} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow">
+              {/* Application Header */}
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className="w-10 h-10 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full flex items-center justify-center">
+                        <FaUser className="w-5 h-5 text-green-900" />
+                      </div>
                       <div>
-                        <p className="font-medium text-gray-900">{app.full_name || app.profiles?.full_name || 'N/A'}</p>
+                        <h3 className="font-semibold text-gray-900 text-lg">
+                          {app.full_name || app.profiles?.full_name || 'Unknown'}
+                        </h3>
                         <p className="text-sm text-gray-500">{app.email}</p>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="font-medium text-gray-900">{app.jobs?.title || 'N/A'}</p>
-                        <p className="text-sm text-gray-500">{app.jobs?.company}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-3 mt-2">
+                      <div className="flex items-center space-x-1 text-sm text-gray-600">
+                        <FaBriefcase className="w-4 h-4" />
+                        <span>{app.jobs?.title || 'Position not specified'}</span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {formatDistanceToNow(new Date(app.created_at), { addSuffix: true })}
-                    </td>
-                    <td className="px-6 py-4">
-                      <select
-                        value={app.status}
-                        onChange={(e) => handleUpdateApplicationStatus(app.id, e.target.value)}
-                        disabled={updatingStatus}
-                        className={`px-3 py-1 rounded-full text-xs font-medium border-0 focus:ring-2 focus:ring-green-500 ${getStatusColor(app.status)}`}
+                      <div className="flex items-center space-x-1 text-sm text-gray-600">
+                        <FaBuilding className="w-4 h-4" />
+                        <span>{app.jobs?.company || 'Company not specified'}</span>
+                      </div>
+                      <div className="flex items-center space-x-1 text-sm text-gray-600">
+                        <FaClock className="w-4 h-4" />
+                        <span>Applied {formatDistanceToNow(new Date(app.created_at), { addSuffix: true })}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-3">
+                    <select
+                      value={app.status}
+                      onChange={(e) => handleUpdateApplicationStatus(app.id, e.target.value)}
+                      disabled={updatingStatus}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border-0 focus:ring-2 focus:ring-green-500 ${getStatusColor(app.status)}`}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="reviewed">Reviewed</option>
+                      <option value="shortlisted">Shortlisted</option>
+                      <option value="interviewed">Interviewed</option>
+                      <option value="offered">Offered</option>
+                      <option value="accepted">Accepted</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                    
+                    <button
+                      onClick={() => {
+                        setSelectedApplication(app);
+                        setShowApplicationDetails(true);
+                      }}
+                      className="px-3 py-1 text-green-900 hover:bg-green-50 rounded-lg transition-colors flex items-center space-x-1"
+                    >
+                      <FaEye className="w-4 h-4" />
+                      <span>View Details</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Document Summary Section */}
+              <div className="p-6 bg-gray-50">
+                <h4 className="font-semibold text-gray-900 mb-3 text-sm">Uploaded Documents</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* CV Section */}
+                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <FaFileAlt className="w-4 h-4 text-green-600" />
+                      <span className="text-xs font-medium text-gray-700">CV/Resume</span>
+                    </div>
+                    {(app.cv_url || app.resume_url) ? (
+                      <button
+                        onClick={() => handleDownloadFile(app.cv_url || app.resume_url, 'CV_Document.pdf')}
+                        className="w-full text-left text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1"
                       >
-                        <option value="pending">Pending</option>
-                        <option value="reviewed">Reviewed</option>
-                        <option value="shortlisted">Shortlisted</option>
-                        <option value="interviewed">Interviewed</option>
-                        <option value="offered">Offered</option>
-                        <option value="accepted">Accepted</option>
-                        <option value="rejected">Rejected</option>
-                      </select>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => {
-                            setSelectedApplication(app);
-                            setShowApplicationDetails(true);
-                          }}
-                          className="text-green-900 hover:text-green-700 font-medium text-sm flex items-center space-x-1"
-                        >
-                          <FaEye className="w-4 h-4" />
-                          <span>View</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            // Find message for this application
-                            const msg = messages.find(m => m.application_id === app.id);
-                            if (msg) {
-                              setSelectedMessage(msg);
-                              setActiveTab('messages');
-                            } else {
-                              alert('No conversation started for this application yet');
-                            }
-                          }}
-                          className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center space-x-1"
-                        >
-                          <FaEnvelope className="w-4 h-4" />
-                          <span>Message</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        <FaDownload className="w-3 h-3" />
+                        <span className="truncate">Download CV</span>
+                      </button>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">Not uploaded</p>
+                    )}
+                  </div>
+                  
+                  {/* Recommendation Letter Section */}
+                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <FaFileSignature className="w-4 h-4 text-blue-600" />
+                      <span className="text-xs font-medium text-gray-700">Recommendation Letter</span>
+                    </div>
+                    {app.recommendation_letter_url ? (
+                      <button
+                        onClick={() => handleDownloadFile(app.recommendation_letter_url, app.recommendation_letter_name || 'Recommendation_Letter.pdf')}
+                        className="w-full text-left text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                      >
+                        <FaDownload className="w-3 h-3" />
+                        <span className="truncate">{app.recommendation_letter_name || 'Download'}</span>
+                      </button>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">Not uploaded</p>
+                    )}
+                  </div>
+                  
+                  {/* Evaluation Form Section */}
+                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <FaAward className="w-4 h-4 text-purple-600" />
+                      <span className="text-xs font-medium text-gray-700">Evaluation Form</span>
+                    </div>
+                    {app.evaluation_letter_url ? (
+                      <button
+                        onClick={() => handleDownloadFile(app.evaluation_letter_url, app.evaluation_letter_name || 'Evaluation_Form.pdf')}
+                        className="w-full text-left text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                      >
+                        <FaDownload className="w-3 h-3" />
+                        <span className="truncate">{app.evaluation_letter_name || 'Download'}</span>
+                      </button>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">Not uploaded</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 
-  // Modals (CreateJobModal, EditJobModal, DeleteConfirmModal, ApplicationDetailsModal)
+  // Modals
   const CreateJobModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -1389,7 +1467,7 @@ const ESSOfficerDashboard = () => {
 
   const ApplicationDetailsModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-2xl font-bold text-gray-900">Application Details</h3>
@@ -1400,6 +1478,7 @@ const ESSOfficerDashboard = () => {
           
           {selectedApplication && (
             <div className="space-y-6">
+              {/* Applicant Information */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h4 className="font-semibold text-gray-900 mb-3">Applicant Information</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -1422,6 +1501,7 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
+              {/* Job Information */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h4 className="font-semibold text-gray-900 mb-3">Job Information</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -1444,6 +1524,76 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
+              {/* Documents Section */}
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h4 className="font-semibold text-gray-900 mb-3">Uploaded Documents</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* CV */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-center space-x-2 mb-3">
+                      {getFileIcon(selectedApplication.cv_url || selectedApplication.resume_url)}
+                      <h5 className="font-medium text-gray-900">CV/Resume</h5>
+                    </div>
+                    {(selectedApplication.cv_url || selectedApplication.resume_url) ? (
+                      <button
+                        onClick={() => handleDownloadFile(selectedApplication.cv_url || selectedApplication.resume_url, 'CV_Document.pdf')}
+                        className="w-full px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center space-x-2"
+                      >
+                        <FaDownload className="w-4 h-4" />
+                        <span>Download CV</span>
+                      </button>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic text-center">Not uploaded</p>
+                    )}
+                  </div>
+                  
+                  {/* Recommendation Letter */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <FaFileSignature className="w-5 h-5 text-blue-600" />
+                      <h5 className="font-medium text-gray-900">Recommendation Letter</h5>
+                    </div>
+                    {selectedApplication.recommendation_letter_url ? (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2 truncate">{selectedApplication.recommendation_letter_name}</p>
+                        <button
+                          onClick={() => handleDownloadFile(selectedApplication.recommendation_letter_url, selectedApplication.recommendation_letter_name || 'Recommendation_Letter.pdf')}
+                          className="w-full px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center space-x-2"
+                        >
+                          <FaDownload className="w-4 h-4" />
+                          <span>Download Letter</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic text-center">Not uploaded</p>
+                    )}
+                  </div>
+                  
+                  {/* Evaluation Form */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <FaAward className="w-5 h-5 text-purple-600" />
+                      <h5 className="font-medium text-gray-900">Evaluation Form</h5>
+                    </div>
+                    {selectedApplication.evaluation_letter_url ? (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2 truncate">{selectedApplication.evaluation_letter_name}</p>
+                        <button
+                          onClick={() => handleDownloadFile(selectedApplication.evaluation_letter_url, selectedApplication.evaluation_letter_name || 'Evaluation_Form.pdf')}
+                          className="w-full px-3 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors flex items-center justify-center space-x-2"
+                        >
+                          <FaDownload className="w-4 h-4" />
+                          <span>Download Form</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic text-center">Not uploaded</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Cover Letter */}
               {selectedApplication.cover_letter && (
                 <div className="bg-gray-50 rounded-xl p-4">
                   <h4 className="font-semibold text-gray-900 mb-3">Cover Letter</h4>
@@ -1451,21 +1601,7 @@ const ESSOfficerDashboard = () => {
                 </div>
               )}
               
-              {selectedApplication.resume_url && (
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3">Resume/CV</h4>
-                  <a
-                    href={selectedApplication.resume_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center space-x-2 text-green-900 hover:text-green-700"
-                  >
-                    <FaFileAlt className="w-4 h-4" />
-                    <span>View Resume</span>
-                  </a>
-                </div>
-              )}
-              
+              {/* Action Buttons */}
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   onClick={() => setShowApplicationDetails(false)}

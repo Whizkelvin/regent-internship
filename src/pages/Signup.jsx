@@ -16,15 +16,20 @@ import {
   FaCheckCircle,
   FaEye,
   FaEyeSlash,
-  FaExclamationTriangle
+  FaExclamationTriangle,
+  FaToggleOn,
+  FaToggleOff,
+  FaUserCircle,
+  FaAddressCard
 } from "react-icons/fa";
-import { MdDateRange } from "react-icons/md";
 
 const Signup = () => {
   const navigate = useNavigate();
 
   const [role, setRole] = useState("");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -32,6 +37,7 @@ const Signup = () => {
   const [program, setProgram] = useState("");
   const [graduationYear, setGraduationYear] = useState("");
   const [phone, setPhone] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -40,24 +46,26 @@ const Signup = () => {
   
   // Validation states
   const [validationErrors, setValidationErrors] = useState({
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
     studentId: "",
-    phone: ""
+    phone: "",
+    companyName: ""
   });
 
   // Validate name (no numbers allowed)
-  const validateName = (value) => {
+  const validateNameField = (value, fieldName) => {
     if (!value.trim()) {
-      return "Name is required";
+      return `${fieldName} is required`;
     }
     if (/\d/.test(value)) {
-      return "Name should not contain numbers";
+      return `${fieldName} should not contain numbers`;
     }
     if (value.length < 2) {
-      return "Name must be at least 2 characters";
+      return `${fieldName} must be at least 2 characters`;
     }
     return "";
   };
@@ -108,8 +116,8 @@ const Signup = () => {
   // Validate student ID
   const validateStudentId = (value) => {
     if (!value) return "Student ID is required";
-    if (value.length <8 ) {
-      return "Student ID must be at least 5 characters";
+    if (value.length < 8) {
+      return "Student ID must be at least 8 characters";
     }
     return "";
   };
@@ -124,11 +132,29 @@ const Signup = () => {
     return "";
   };
 
-  // Handle name change with validation
-  const handleNameChange = (e) => {
+  // Validate company name
+  const validateCompanyName = (value) => {
+    if (!value.trim()) return "Company name is required";
+    if (value.length < 2) return "Company name must be at least 2 characters";
+    return "";
+  };
+
+  // Handle name changes
+  const handleFirstNameChange = (e) => {
     const value = e.target.value;
-    setName(value);
-    setValidationErrors(prev => ({ ...prev, name: validateName(value) }));
+    setFirstName(value);
+    setValidationErrors(prev => ({ ...prev, firstName: validateNameField(value, "First name") }));
+  };
+
+  const handleMiddleNameChange = (e) => {
+    const value = e.target.value;
+    setMiddleName(value);
+  };
+
+  const handleLastNameChange = (e) => {
+    const value = e.target.value;
+    setLastName(value);
+    setValidationErrors(prev => ({ ...prev, lastName: validateNameField(value, "Last name") }));
   };
 
   // Handle email change with validation
@@ -169,6 +195,21 @@ const Signup = () => {
     setValidationErrors(prev => ({ ...prev, phone: validatePhone(value) }));
   };
 
+  // Handle company name change
+  const handleCompanyNameChange = (e) => {
+    const value = e.target.value;
+    setCompanyName(value);
+    setValidationErrors(prev => ({ ...prev, companyName: validateCompanyName(value) }));
+  };
+
+  // Get full name
+  const getFullName = () => {
+    let full = firstName;
+    if (middleName) full += ` ${middleName}`;
+    if (lastName) full += ` ${lastName}`;
+    return full;
+  };
+
   // Get password strength indicator
   const getPasswordStrength = () => {
     if (!password) return { level: 0, text: "", color: "" };
@@ -193,75 +234,107 @@ const Signup = () => {
     setErrorMsg("");
     setSuccessMsg("");
 
-    // Validate all fields
-    const nameError = validateName(name);
+    // Validate all fields based on role
+    const firstNameError = validateNameField(firstName, "First name");
+    const lastNameError = validateNameField(lastName, "Last name");
     const emailError = validateEmail(email);
     const passwordError = validatePassword(password);
     const confirmPasswordError = validateConfirmPassword(confirmPassword);
-    const studentIdError = validateStudentId(studentId);
     const phoneError = validatePhone(phone);
 
-    if (nameError || emailError || passwordError || confirmPasswordError || studentIdError || phoneError) {
+    let studentIdError = "";
+    let companyNameError = "";
+
+    if (role === "student") {
+      studentIdError = validateStudentId(studentId);
+      if (!program) {
+        setErrorMsg("Please select your academic program");
+        setLoading(false);
+        return;
+      }
+      if (!graduationYear) {
+        setErrorMsg("Please select your graduation year");
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (role === "company") {
+      companyNameError = validateCompanyName(companyName);
+    }
+
+    if (firstNameError || lastNameError || emailError || passwordError || confirmPasswordError || phoneError || studentIdError || companyNameError) {
       setValidationErrors({
-        name: nameError,
+        firstName: firstNameError,
+        lastName: lastNameError,
         email: emailError,
         password: passwordError,
         confirmPassword: confirmPasswordError,
+        phone: phoneError,
         studentId: studentIdError,
-        phone: phoneError
+        companyName: companyNameError
       });
       setErrorMsg("Please fix the validation errors before submitting");
-      setLoading(false);
       return;
     }
 
     if (!role) {
       setErrorMsg("Please select your role");
-      setLoading(false);
-      return;
-    }
-
-    if (role === "student" && (!program || !graduationYear)) {
-      setErrorMsg("Please fill in all academic information");
-      setLoading(false);
       return;
     }
 
     setLoading(true);
 
     try {
+      const fullName = getFullName();
+      
+      // Prepare user metadata based on role
+      const userMetadata = {
+        role,
+        full_name: fullName,
+        phone,
+      };
+
+      if (role === "student") {
+        userMetadata.student_id = studentId;
+        userMetadata.program = program;
+        userMetadata.graduation_year = graduationYear;
+      } else if (role === "company") {
+        userMetadata.company_name = companyName;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            role,
-            full_name: name,
-            student_id: studentId,
-            program,
-            graduation_year: graduationYear,
-            phone,
-          },
+          data: userMetadata,
         },
       });
 
       if (error) throw error;
 
       // Insert into profiles table
+      const profileData = {
+        id: data.user?.id,
+        email: email,
+        full_name: fullName,
+        role: role,
+        phone: phone,
+        created_at: new Date().toISOString(),
+        status: 'active'
+      };
+
+      if (role === "student") {
+        profileData.student_id = studentId;
+        profileData.program = program;
+        profileData.graduation_year = graduationYear;
+      } else if (role === "company") {
+        profileData.company_name = companyName;
+      }
+
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert([{
-          id: data.user?.id,
-          email: email,
-          full_name: name,
-          role: role,
-          phone: phone,
-          student_id: studentId,
-          program: program,
-          graduation_year: graduationYear,
-          status: 'active',
-          created_at: new Date().toISOString()
-        }]);
+        .insert([profileData]);
 
       if (profileError) {
         console.error('Profile creation error:', profileError);
@@ -270,7 +343,9 @@ const Signup = () => {
       setSuccessMsg("Account created successfully! Please check your email for verification.");
       
       // Reset form
-      setName("");
+      setFirstName("");
+      setMiddleName("");
+      setLastName("");
       setEmail("");
       setPassword("");
       setConfirmPassword("");
@@ -279,6 +354,7 @@ const Signup = () => {
       setGraduationYear("");
       setPhone("");
       setRole("");
+      setCompanyName("");
 
       setTimeout(() => navigate("/"), 3000);
     } catch (error) {
@@ -373,19 +449,57 @@ const Signup = () => {
                     )}
                   </div>
 
-                  {/* Name Field */}
-                  <div className="space-y-2">
+                  {/* Name Fields - First, Middle, Last */}
+                  <div className="space-y-3">
                     <label className="text-sm font-semibold text-gray-700 block">
                       Full Name <span className="text-red-950 ml-1">*</span>
                     </label>
+                    
+                    {/* First Name */}
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder="Enter your full name (letters only)"
-                        value={name}
-                        onChange={handleNameChange}
+                        placeholder="First Name"
+                        value={firstName}
+                        onChange={handleFirstNameChange}
                         className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
-                          validationErrors.name ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                          validationErrors.firstName ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                        }`}
+                        required
+                      />
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <FaUserCircle className="w-5 h-5 text-gray-400" />
+                      </div>
+                    </div>
+                    {validationErrors.firstName && (
+                      <p className="text-xs text-red-600 flex items-center mt-1">
+                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.firstName}
+                      </p>
+                    )}
+
+                    {/* Middle Name (Optional) */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Middle Name (Optional)"
+                        value={middleName}
+                        onChange={handleMiddleNameChange}
+                        className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300"
+                      />
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <FaAddressCard className="w-5 h-5 text-gray-400" />
+                      </div>
+                    </div>
+
+                    {/* Last Name */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Last Name"
+                        value={lastName}
+                        onChange={handleLastNameChange}
+                        className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                          validationErrors.lastName ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
                         }`}
                         required
                       />
@@ -393,9 +507,9 @@ const Signup = () => {
                         <FaUser className="w-5 h-5 text-gray-400" />
                       </div>
                     </div>
-                    {validationErrors.name && (
+                    {validationErrors.lastName && (
                       <p className="text-xs text-red-600 flex items-center mt-1">
-                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.name}
+                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.lastName}
                       </p>
                     )}
                   </div>
@@ -425,8 +539,146 @@ const Signup = () => {
                         <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.email}
                       </p>
                     )}
-                    {role === "student" && !validationErrors.email && email && (
+                    {role === "student" && !validationErrors.email && email && email.endsWith("@regent.edu.gh") && (
                       <p className="text-xs text-green-600">✓ Using Regent email address</p>
+                    )}
+                  </div>
+
+                  {/* Student ID (Students only) */}
+                  {role === "student" && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700 block">
+                        Student ID <span className="text-red-950 ml-1">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Enter your student ID"
+                          value={studentId}
+                          onChange={handleStudentIdChange}
+                          className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                            validationErrors.studentId ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                          }`}
+                          required
+                        />
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <FaIdCard className="w-5 h-5 text-gray-400" />
+                        </div>
+                      </div>
+                      {validationErrors.studentId && (
+                        <p className="text-xs text-red-600 flex items-center mt-1">
+                          <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.studentId}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Company Name (Companies only) */}
+                  {role === "company" && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700 block">
+                        Company Name <span className="text-red-950 ml-1">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Enter your company name"
+                          value={companyName}
+                          onChange={handleCompanyNameChange}
+                          className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                            validationErrors.companyName ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                          }`}
+                          required
+                        />
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <FaBuilding className="w-5 h-5 text-gray-400" />
+                        </div>
+                      </div>
+                      {validationErrors.companyName && (
+                        <p className="text-xs text-red-600 flex items-center mt-1">
+                          <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.companyName}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Program Field (Students only) */}
+                  {role === "student" && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700 block">
+                        Academic Program <span className="text-red-950 ml-1">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={program}
+                          onChange={(e) => setProgram(e.target.value)}
+                          className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300 appearance-none"
+                          required
+                        >
+                          <option value="">Select Your Program</option>
+                          <option>Business Administration</option>
+                          <option>Computer Science</option>
+                          <option>Information Technology</option>
+                          <option>Psychology</option>
+                          <option>Accounting</option>
+                          <option>Economics</option>
+                          <option>Marketing</option>
+                          <option>Human Resource Management</option>
+                          <option>Banking and Finance</option>
+                          <option>Theology</option>
+                        </select>
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <FaGraduationCap className="w-5 h-5 text-gray-400" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Graduation Year (Students only) */}
+                  {role === "student" && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-gray-700 block">
+                        Expected Graduation Year <span className="text-red-950 ml-1">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="date"
+                          value={graduationYear}
+                          onChange={(e) => setGraduationYear(e.target.value)}
+                          className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300"
+                          required
+                        />
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <FaCalendarAlt className="w-5 h-5 text-gray-400" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Phone Field */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700 block">
+                      Phone Number <span className="text-red-950 ml-1">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        placeholder="Enter your phone number (e.g., +233 XX XXX XXXX)"
+                        value={phone}
+                        onChange={handlePhoneChange}
+                        className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                          validationErrors.phone ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                        }`}
+                        required
+                      />
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <FaPhone className="w-5 h-5 text-gray-400" />
+                      </div>
+                    </div>
+                    {validationErrors.phone && (
+                      <p className="text-xs text-red-600 flex items-center mt-1">
+                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.phone}
+                      </p>
                     )}
                   </div>
 
@@ -506,113 +758,6 @@ const Signup = () => {
                     )}
                     {confirmPassword && password && !validationErrors.confirmPassword && password === confirmPassword && (
                       <p className="text-xs text-green-600">✓ Passwords match</p>
-                    )}
-                  </div>
-
-                  {/* Student ID Field */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-gray-700 block">
-                      {role === "student" ? "Student ID" : "ID Number"} <span className="text-red-950 ml-1">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder={`Enter your ${role === "student" ? "student ID" : "ID number"}`}
-                        value={studentId}
-                        onChange={handleStudentIdChange}
-                        className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
-                          validationErrors.studentId ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
-                        }`}
-                        required
-                      />
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <FaIdCard className="w-5 h-5 text-gray-400" />
-                      </div>
-                    </div>
-                    {validationErrors.studentId && (
-                      <p className="text-xs text-red-600 flex items-center mt-1">
-                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.studentId}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Program Field (Students only) */}
-                  {role === "student" && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-gray-700 block">
-                        Academic Program <span className="text-red-950 ml-1">*</span>
-                      </label>
-                      <div className="relative">
-                        <select
-                          value={program}
-                          onChange={(e) => setProgram(e.target.value)}
-                          className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300 appearance-none"
-                          required
-                        >
-                          <option value="">Select Your Program</option>
-                          <option>Business Administration</option>
-                          <option>Computer Science</option>
-                          <option>Information Technology</option>
-                          <option>Psychology</option>
-                          <option>Accounting</option>
-                          <option>Economics</option>
-                          <option>Marketing</option>
-                          <option>Human Resource Management</option>
-                          <option>Banking and Finance</option>
-                          <option>Theology</option>
-                        </select>
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <FaGraduationCap className="w-5 h-5 text-gray-400" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Graduation Year (Students only) */}
-                  {role === "student" && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-gray-700 block">
-                        Expected Graduation Year <span className="text-red-950 ml-1">*</span>
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="date"
-                          value={graduationYear}
-                          onChange={(e) => setGraduationYear(e.target.value)}
-                          className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300"
-                          required
-                        />
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <FaCalendarAlt className="w-5 h-5 text-gray-400" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Phone Field */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-gray-700 block">
-                      Phone Number <span className="text-red-950 ml-1">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="tel"
-                        placeholder="Enter your phone number (e.g., +233 XX XXX XXXX)"
-                        value={phone}
-                        onChange={handlePhoneChange}
-                        className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
-                          validationErrors.phone ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
-                        }`}
-                        required
-                      />
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <FaPhone className="w-5 h-5 text-gray-400" />
-                      </div>
-                    </div>
-                    {validationErrors.phone && (
-                      <p className="text-xs text-red-600 flex items-center mt-1">
-                        <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.phone}
-                      </p>
                     )}
                   </div>
 

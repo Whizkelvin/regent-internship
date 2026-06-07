@@ -51,6 +51,9 @@ import {
   FaTimes,
   FaPaperclip,
   FaDownload,
+  FaLock,
+  FaFileSignature,
+  FaRegFilePdf,
 } from "react-icons/fa";
 
 // Extracted Components
@@ -230,10 +233,16 @@ const InternshipJobDescription = () => {
     phone: "",
     cover_letter: "",
     resume_url: "",
-    cv_url: "", // Add CV URL field
+    cv_url: "",
+    recommendation_letter_url: "",
+    recommendation_letter_name: "",
+    evaluation_letter_url: "",
+    evaluation_letter_name: "",
   });
   const [uploadingResume, setUploadingResume] = useState(false);
-  const [userCV, setUserCV] = useState(null); // Store user's existing CV
+  const [uploadingRecommendation, setUploadingRecommendation] = useState(false);
+  const [uploadingEvaluation, setUploadingEvaluation] = useState(false);
+  const [userCV, setUserCV] = useState(null);
   
   const [userHasApplied, setUserHasApplied] = useState(false);
   const [userApplication, setUserApplication] = useState(null);
@@ -242,6 +251,18 @@ const InternshipJobDescription = () => {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
+  
+  // New state for deadline lock
+  const [isDeadlinePassed, setIsDeadlinePassed] = useState(false);
+  
+  // Track if documents are uploaded
+  const [recommendationUploaded, setRecommendationUploaded] = useState(false);
+  const [evaluationUploaded, setEvaluationUploaded] = useState(false);
+  const [cvUploaded, setCvUploaded] = useState(false);
+
+  // Template URLs (update these with your actual file paths)
+  const RECOMMENDATION_TEMPLATE_URL = "/templates/Regent_University_Internship_Template.pdf";
+  const EVALUATION_TEMPLATE_URL = "/templates/PDF_Phoenix_20250626_114721.pdf";
 
   // Fetch user's existing CV
   useEffect(() => {
@@ -259,6 +280,7 @@ const InternshipJobDescription = () => {
         if (data && !error) {
           setUserCV(data);
           setApplicationForm(prev => ({ ...prev, cv_url: data.cv_url }));
+          setCvUploaded(true);
         }
       } catch (error) {
         console.error("Error fetching user CV:", error);
@@ -321,6 +343,29 @@ const InternshipJobDescription = () => {
     checkUserApplication();
   }, [id]);
 
+  // Check if deadline has passed
+  useEffect(() => {
+    if (job?.deadline) {
+      const deadlineDate = new Date(job.deadline);
+      const currentDate = new Date();
+      const passed = currentDate > deadlineDate;
+      setIsDeadlinePassed(passed);
+    } else {
+      setIsDeadlinePassed(false);
+    }
+  }, [job]);
+
+  // Check if all required documents are uploaded
+  const isFormComplete = useMemo(() => {
+    return (
+      cvUploaded &&
+      recommendationUploaded &&
+      evaluationUploaded &&
+      applicationForm.full_name &&
+      applicationForm.email
+    );
+  }, [cvUploaded, recommendationUploaded, evaluationUploaded, applicationForm.full_name, applicationForm.email]);
+
   // Fixed: Use useCallback with proper dependencies
   const fetchJobDetails = useCallback(
     async (signal) => {
@@ -369,169 +414,159 @@ const InternshipJobDescription = () => {
     [id]
   );
 
-const fetchComments = useCallback(
-  async (signal) => {
+  const fetchComments = useCallback(
+    async (signal) => {
+      try {
+        console.log('🔄 Fetching comments for job:', id);
+        
+        const { data: commentsData, error } = await supabase
+          .from("job_reviews")
+          .select("*")
+          .eq("job_id", id)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        
+        console.log(`✅ Found ${commentsData?.length || 0} comments:`, commentsData);
+
+        if (!commentsData || commentsData.length === 0) {
+          setComments([]);
+          return;
+        }
+
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        const currentUserId = currentUser?.id;
+
+        const userIds = [...new Set(commentsData
+          .map(comment => comment.user_id)
+          .filter(Boolean)
+        )];
+
+        const usersMap = {};
+        
+        if (userIds.length > 0) {
+          try {
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id, email, name, full_name, username, avatar_url')
+              .in('id', userIds);
+            
+            if (profiles) {
+              profiles.forEach(profile => {
+                usersMap[profile.id] = {
+                  display_name: profile.full_name || profile.name || profile.username || profile.email?.split('@')[0] || 'User',
+                  email: profile.email,
+                  avatar_url: profile.avatar_url
+                };
+              });
+            }
+          } catch (profileError) {
+            console.warn('Could not fetch from profiles:', profileError);
+          }
+
+          const missingUserIds = userIds.filter(id => !usersMap[id]);
+          if (missingUserIds.length > 0) {
+            try {
+              const { data: { users } } = await supabase.auth.admin.listUsers();
+              
+              if (users) {
+                users.forEach(user => {
+                  if (missingUserIds.includes(user.id) && !usersMap[user.id]) {
+                    usersMap[user.id] = {
+                      display_name: user.user_metadata?.full_name || 
+                                  user.user_metadata?.name || 
+                                  user.email?.split('@')[0] || 
+                                  'User',
+                      email: user.email,
+                      avatar_url: user.user_metadata?.avatar_url
+                    };
+                  }
+                });
+              }
+            } catch (authError) {
+              console.warn('Could not fetch from auth:', authError);
+            }
+          }
+        }
+
+        const processedComments = commentsData.map(comment => {
+          const userInfo = comment.user_id ? usersMap[comment.user_id] : null;
+          const isCurrentUser = currentUserId && comment.user_id === currentUserId;
+          
+          let displayName = comment.user_display_name;
+          let avatarUrl = comment.user_avatar_url;
+          let email = comment.user_email;
+          
+          if (!displayName && userInfo) {
+            displayName = userInfo.display_name;
+            avatarUrl = userInfo.avatar_url || avatarUrl;
+            email = userInfo.email || email;
+          }
+          
+          if (!displayName && comment.user_id) {
+            displayName = `User_${comment.user_id.substring(0, 8)}`;
+          }
+          
+          if (!displayName) {
+            displayName = 'Anonymous';
+          }
+          
+          if (isCurrentUser) {
+            displayName = 'You';
+            email = currentUser?.email || 'Your email';
+          }
+
+          return {
+            ...comment,
+            user_display_name: displayName,
+            user_avatar_url: avatarUrl,
+            user_email: email,
+            is_current_user: isCurrentUser,
+            profiles: {
+              name: displayName,
+              avatar_url: avatarUrl
+            }
+          };
+        });
+
+        setComments(processedComments);
+
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        console.error("❌ Error fetching comments:", error);
+        setComments([]);
+      }
+    },
+    [id]
+  );
+
+  const fetchApplicationMessages = useCallback(async (applicationId) => {
     try {
-      console.log('🔄 Fetching comments for job:', id);
-      
-      const { data: commentsData, error } = await supabase
-        .from("job_reviews")
-        .select("*")
-        .eq("job_id", id)
-        .order("created_at", { ascending: false });
+      const { data: messages, error } = await supabase
+        .from("application_messages")
+        .select("id, application_id, sender_id, message, is_read, created_at")
+        .eq("application_id", applicationId)
+        .order("created_at", { ascending: true });
 
       if (error) throw error;
       
-      console.log(`✅ Found ${commentsData?.length || 0} comments:`, commentsData);
-
-      if (!commentsData || commentsData.length === 0) {
-        setComments([]);
-        return;
-      }
-
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      const currentUserId = currentUser?.id;
-
-      const userIds = [...new Set(commentsData
-        .map(comment => comment.user_id)
-        .filter(Boolean)
-      )];
-
-      console.log('👤 All user IDs in comments:', userIds);
-
-      const usersMap = {};
       
-      if (userIds.length > 0) {
-        try {
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, email, name, full_name, username, avatar_url')
-            .in('id', userIds);
-          
-          if (profiles) {
-            profiles.forEach(profile => {
-              usersMap[profile.id] = {
-                display_name: profile.full_name || profile.name || profile.username || profile.email?.split('@')[0] || 'User',
-                email: profile.email,
-                avatar_url: profile.avatar_url
-              };
-            });
-            console.log('✅ Got user info from profiles:', Object.keys(usersMap).length);
-          }
-        } catch (profileError) {
-          console.warn('Could not fetch from profiles:', profileError);
-        }
-
-        const missingUserIds = userIds.filter(id => !usersMap[id]);
-        if (missingUserIds.length > 0) {
-          console.log('🔄 Getting missing users from auth:', missingUserIds);
-          
-          try {
-            const { data: { users } } = await supabase.auth.admin.listUsers();
-            
-            if (users) {
-              users.forEach(user => {
-                if (missingUserIds.includes(user.id) && !usersMap[user.id]) {
-                  usersMap[user.id] = {
-                    display_name: user.user_metadata?.full_name || 
-                                user.user_metadata?.name || 
-                                user.email?.split('@')[0] || 
-                                'User',
-                    email: user.email,
-                    avatar_url: user.user_metadata?.avatar_url
-                  };
-                }
-              });
-            }
-          } catch (authError) {
-            console.warn('Could not fetch from auth:', authError);
-          }
-        }
-      }
-
-      const processedComments = commentsData.map(comment => {
-        const userInfo = comment.user_id ? usersMap[comment.user_id] : null;
-        const isCurrentUser = currentUserId && comment.user_id === currentUserId;
-        
-        let displayName = comment.user_display_name;
-        let avatarUrl = comment.user_avatar_url;
-        let email = comment.user_email;
-        
-        if (!displayName && userInfo) {
-          displayName = userInfo.display_name;
-          avatarUrl = userInfo.avatar_url || avatarUrl;
-          email = userInfo.email || email;
-        }
-        
-        if (!displayName && comment.user_id) {
-          displayName = `User_${comment.user_id.substring(0, 8)}`;
-        }
-        
-        if (!displayName) {
-          displayName = 'Anonymous';
-        }
-        
-        if (isCurrentUser) {
-          displayName = 'You';
-          email = currentUser?.email || 'Your email';
-        }
-
-        return {
-          ...comment,
-          user_display_name: displayName,
-          user_avatar_url: avatarUrl,
-          user_email: email,
-          is_current_user: isCurrentUser,
-          profiles: {
-            name: displayName,
-            avatar_url: avatarUrl
-          }
-        };
-      });
-
-      console.log('🎉 Final processed comments:', processedComments);
-      setComments(processedComments);
-
+      const simpleMessages = messages.map(msg => ({
+        ...msg,
+        full_name: msg.sender_id === currentUser?.id ? 'You' : 
+                  (msg.full_name || 'Applicant'),
+        email: msg.email || 'No email',
+        is_current_user: msg.sender_id === currentUser?.id
+      }));
+      
+      setApplicationMessages(simpleMessages);
+      
     } catch (error) {
-      if (error.name === "AbortError") return;
-      console.error("❌ Error fetching comments:", error);
-      setComments([]);
+      console.error('❌ Error fetching messages:', error);
+      setApplicationMessages([]);
     }
-  },
-  [id]
-);
-
-  const fetchApplicationMessages = useCallback(async (applicationId) => {
-  try {
-    console.log('🔄 Fetching messages for application:', applicationId);
-    
-    const { data: messages, error } = await supabase
-      .from("application_messages")
-      .select("id, application_id, sender_id, message, is_read, created_at")
-      .eq("application_id", applicationId)
-      .order("created_at", { ascending: true });
-
-    if (error) throw error;
-    
-    console.log(`✅ Found ${messages?.length || 0} messages`);
-    
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    
-    const simpleMessages = messages.map(msg => ({
-      ...msg,
-      full_name: msg.sender_id === currentUser?.id ? 'You' : 
-                (msg.full_name || 'Applicant'),
-      email: msg.email || 'No email',
-      is_current_user: msg.sender_id === currentUser?.id
-    }));
-    
-    setApplicationMessages(simpleMessages);
-    
-  } catch (error) {
-    console.error('❌ Error fetching messages:', error);
-    setApplicationMessages([]);
-  }
-}, []);
+  }, []);
 
   // Fixed: Stable input handlers
   const handleInputChange = useCallback(
@@ -592,7 +627,8 @@ const fetchComments = useCallback(
         data: { publicUrl },
       } = supabase.storage.from("job-portal-files").getPublicUrl(filePath);
 
-      setApplicationForm((prev) => ({ ...prev, resume_url: publicUrl }));
+      setApplicationForm((prev) => ({ ...prev, resume_url: publicUrl, cv_url: publicUrl }));
+      setCvUploaded(true);
       return publicUrl;
     } catch (error) {
       console.error("Error uploading resume:", error);
@@ -603,7 +639,127 @@ const fetchComments = useCallback(
     }
   }, []);
 
+  const handleUploadRecommendation = useCallback(async (file) => {
+    try {
+      setUploadingRecommendation(true);
+
+      const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+      if (file.size > MAX_FILE_SIZE) {
+        alert("File size should be less than 5MB");
+        return null;
+      }
+
+      const validTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ];
+      if (!validTypes.includes(file.type)) {
+        alert("Please upload a PDF or Word document");
+        return null;
+      }
+
+      const fileExt = file.name.split(".").pop();
+      const fileName = `recommendation_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2)}.${fileExt}`;
+      const filePath = `recommendations/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("job-portal-files")
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("job-portal-files").getPublicUrl(filePath);
+
+      setApplicationForm((prev) => ({ 
+        ...prev, 
+        recommendation_letter_url: publicUrl,
+        recommendation_letter_name: file.name
+      }));
+      setRecommendationUploaded(true);
+      return publicUrl;
+    } catch (error) {
+      console.error("Error uploading recommendation letter:", error);
+      alert("Error uploading recommendation letter: " + error.message);
+      return null;
+    } finally {
+      setUploadingRecommendation(false);
+    }
+  }, []);
+
+  const handleUploadEvaluation = useCallback(async (file) => {
+    try {
+      setUploadingEvaluation(true);
+
+      const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+      if (file.size > MAX_FILE_SIZE) {
+        alert("File size should be less than 5MB");
+        return null;
+      }
+
+      const validTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ];
+      if (!validTypes.includes(file.type)) {
+        alert("Please upload a PDF or Word document");
+        return null;
+      }
+
+      const fileExt = file.name.split(".").pop();
+      const fileName = `evaluation_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2)}.${fileExt}`;
+      const filePath = `evaluations/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("job-portal-files")
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("job-portal-files").getPublicUrl(filePath);
+
+      setApplicationForm((prev) => ({ 
+        ...prev, 
+        evaluation_letter_url: publicUrl,
+        evaluation_letter_name: file.name
+      }));
+      setEvaluationUploaded(true);
+      return publicUrl;
+    } catch (error) {
+      console.error("Error uploading evaluation letter:", error);
+      alert("Error uploading evaluation letter: " + error.message);
+      return null;
+    } finally {
+      setUploadingEvaluation(false);
+    }
+  }, []);
+
+  const handleDownloadTemplate = useCallback((templateUrl, templateName) => {
+    // Create a link and trigger download
+    const link = document.createElement('a');
+    link.href = templateUrl;
+    link.download = templateName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, []);
+
   const handleApply = useCallback(async () => {
+    // Check if deadline has passed before allowing application
+    if (isDeadlinePassed) {
+      alert("The application deadline for this position has passed. Applications are no longer being accepted.");
+      return;
+    }
+
     try {
       const {
         data: { user },
@@ -616,13 +772,20 @@ const fetchComments = useCallback(
         return;
       }
 
+      // Reset upload states
+      setRecommendationUploaded(false);
+      setEvaluationUploaded(false);
+      if (!userCV) {
+        setCvUploaded(false);
+      }
+
       // Pre-fill user data
       setApplicationForm((prev) => ({
         ...prev,
         email: user.email || "",
         full_name:
           user.user_metadata?.full_name || user.user_metadata?.name || "",
-        cv_url: userCV?.cv_url || "", // Use existing CV if available
+        cv_url: userCV?.cv_url || "",
       }));
 
       setShowApplicationModal(true);
@@ -631,11 +794,32 @@ const fetchComments = useCallback(
       alert("Please login to apply for this job");
       navigate("/login");
     }
-  }, [navigate, userCV]);
+  }, [navigate, userCV, isDeadlinePassed]);
 
   const handleSubmitApplication = useCallback(
     async (e) => {
       e.preventDefault();
+
+      // Double-check deadline hasn't passed before submitting
+      if (isDeadlinePassed) {
+        alert("The application deadline has passed. Your application cannot be submitted.");
+        setShowApplicationModal(false);
+        return;
+      }
+
+      // Validate all required documents are uploaded
+      if (!cvUploaded) {
+        alert("Please upload your CV/Resume before submitting.");
+        return;
+      }
+      if (!recommendationUploaded) {
+        alert("Please upload the signed recommendation letter before submitting.");
+        return;
+      }
+      if (!evaluationUploaded) {
+        alert("Please upload the completed evaluation form before submitting.");
+        return;
+      }
 
       try {
         const {
@@ -649,9 +833,9 @@ const fetchComments = useCallback(
         if (
           !applicationForm.full_name ||
           !applicationForm.email ||
-          !applicationForm.resume_url
+          !applicationForm.cv_url
         ) {
-          alert("Please fill all required fields and upload your resume");
+          alert("Please fill all required fields and upload your CV");
           return;
         }
 
@@ -665,8 +849,12 @@ const fetchComments = useCallback(
               email: applicationForm.email,
               phone: applicationForm.phone,
               cover_letter: applicationForm.cover_letter,
-              resume_url: applicationForm.resume_url,
-              cv_url: applicationForm.cv_url || userCV?.cv_url || null, // Include CV URL
+              resume_url: applicationForm.cv_url,
+              cv_url: applicationForm.cv_url,
+              recommendation_letter_url: applicationForm.recommendation_letter_url,
+              recommendation_letter_name: applicationForm.recommendation_letter_name,
+              evaluation_letter_url: applicationForm.evaluation_letter_url,
+              evaluation_letter_name: applicationForm.evaluation_letter_name,
               status: "pending",
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -681,7 +869,7 @@ const fetchComments = useCallback(
           {
             application_id: data.id,
             status: "pending",
-            notes: "Application submitted",
+            notes: "Application submitted with all required documents",
             created_at: new Date().toISOString(),
           },
         ]);
@@ -690,6 +878,7 @@ const fetchComments = useCallback(
         setUserApplication(data);
         setShowApplicationModal(false);
 
+        // Reset form
         setApplicationForm({
           full_name: "",
           email: "",
@@ -697,7 +886,16 @@ const fetchComments = useCallback(
           cover_letter: "",
           resume_url: "",
           cv_url: "",
+          recommendation_letter_url: "",
+          recommendation_letter_name: "",
+          evaluation_letter_url: "",
+          evaluation_letter_name: "",
         });
+        setRecommendationUploaded(false);
+        setEvaluationUploaded(false);
+        if (!userCV) {
+          setCvUploaded(false);
+        }
 
         alert(
           "Application submitted successfully! We'll review your application soon."
@@ -707,7 +905,7 @@ const fetchComments = useCallback(
         alert("Error submitting application: " + error.message);
       }
     },
-    [id, applicationForm, userCV]
+    [id, applicationForm, userCV, isDeadlinePassed, cvUploaded, recommendationUploaded, evaluationUploaded]
   );
 
   const sendMessageToAdmin = useCallback(
@@ -720,12 +918,6 @@ const fetchComments = useCallback(
         const {
           data: { user },
         } = await supabase.auth.getUser();
-
-        console.log('Sending message with:', {
-          application_id: userApplication.id,
-          sender_id: user.id,
-          message: newMessage
-        });
 
         const { data, error } = await supabase
           .from("application_messages")
@@ -743,8 +935,6 @@ const fetchComments = useCallback(
           .single();
 
         if (error) throw error;
-
-        console.log('Message sent successfully:', data);
 
         await fetchApplicationMessages(userApplication.id);
         
@@ -810,101 +1000,90 @@ const fetchComments = useCallback(
     [job]
   );
 
-  const handleLikeComment = useCallback((commentId) => {
-    console.log("Liked comment:", commentId);
-  }, []);
-
-const handleAddComment = useCallback(async (e) => {
-  e.preventDefault();
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    alert('Please sign in to post a review');
-    return;
-  }
-  
-  if (!newComment.trim()) {
-    alert('Please write a review before posting');
-    return;
-  }
-
-  setCommentLoading(true);
-
-  try {
-    const userDisplayName = user.user_metadata?.full_name || 
-                          user.user_metadata?.name || 
-                          user.email?.split('@')[0] || 
-                          'User';
+  const handleAddComment = useCallback(async (e) => {
+    e.preventDefault();
     
-    const userAvatar = user.user_metadata?.avatar_url;
-    const userEmail = user.email;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert('Please sign in to post a review');
+      return;
+    }
+    
+    if (!newComment.trim()) {
+      alert('Please write a review before posting');
+      return;
+    }
 
-    console.log('📝 Storing review with user:', {
-      id: user.id,
-      name: userDisplayName,
-      email: userEmail
-    });
+    setCommentLoading(true);
 
-    const { data, error } = await supabase
-      .from('job_reviews')
-      .insert([
-        {
-          job_id: id,
-          user_id: user.id,
-          user_display_name: userDisplayName,
-          user_email: userEmail,
-          user_avatar_url: userAvatar,
-          content: newComment.trim(),
-          rating: rating,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ])
-      .select()
-      .single();
+    try {
+      const userDisplayName = user.user_metadata?.full_name || 
+                            user.user_metadata?.name || 
+                            user.email?.split('@')[0] || 
+                            'User';
+      
+      const userAvatar = user.user_metadata?.avatar_url;
+      const userEmail = user.email;
 
-    if (error) {
-      console.error('❌ Insert error:', error);
-      const { data: simpleData, error: simpleError } = await supabase
+      const { data, error } = await supabase
         .from('job_reviews')
         .insert([
           {
             job_id: id,
             user_id: user.id,
+            user_display_name: userDisplayName,
+            user_email: userEmail,
+            user_avatar_url: userAvatar,
             content: newComment.trim(),
             rating: rating,
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           }
         ])
         .select()
         .single();
+
+      if (error) {
+        const { data: simpleData, error: simpleError } = await supabase
+          .from('job_reviews')
+          .insert([
+            {
+              job_id: id,
+              user_id: user.id,
+              content: newComment.trim(),
+              rating: rating,
+              created_at: new Date().toISOString()
+            }
+          ])
+          .select()
+          .single();
+          
+        if (simpleError) throw simpleError;
         
-      if (simpleError) throw simpleError;
+        const commentWithUserInfo = {
+          ...simpleData,
+          user_display_name: userDisplayName,
+          user_email: userEmail,
+          user_avatar_url: userAvatar
+        };
+        
+        setComments(prev => [commentWithUserInfo, ...prev]);
+      } else {
+        setComments(prev => [data, ...prev]);
+      }
       
-      const commentWithUserInfo = {
-        ...simpleData,
-        user_display_name: userDisplayName,
-        user_email: userEmail,
-        user_avatar_url: userAvatar
-      };
+      setNewComment('');
+      setRating(5);
       
-      setComments(prev => [commentWithUserInfo, ...prev]);
-    } else {
-      setComments(prev => [data, ...prev]);
+      alert('✅ Review posted successfully!');
+      
+    } catch (error) {
+      console.error('❌ Error posting review:', error);
+      alert('❌ Failed to post review: ' + error.message);
+    } finally {
+      setCommentLoading(false);
     }
-    
-    setNewComment('');
-    setRating(5);
-    
-    alert('✅ Review posted successfully!');
-    
-  } catch (error) {
-    console.error('❌ Error posting review:', error);
-    alert('❌ Failed to post review: ' + error.message);
-  } finally {
-    setCommentLoading(false);
-  }
-}, [id, newComment, rating, comments]);
+  }, [id, newComment, rating]);
 
   const getJobTypeColor = useCallback((jobType) => {
     switch (jobType) {
@@ -930,14 +1109,30 @@ const handleAddComment = useCallback(async (e) => {
     return diffDays > 0 ? diffDays : 0;
   }, []);
 
-  // Fixed: Application Modal using useMemo
+  const isDeadlineExpired = useCallback((deadline) => {
+    if (!deadline) return false;
+    const today = new Date();
+    const deadlineDate = new Date(deadline);
+    return today > deadlineDate;
+  }, []);
+
+  const hasExistingCV = useCallback(() => {
+    return userCV && userCV.cv_url;
+  }, [userCV]);
+
+  // Application Modal component
   const ApplicationModal = useMemo(() => {
     if (!showApplicationModal) return null;
 
+    if (isDeadlinePassed) {
+      setShowApplicationModal(false);
+      return null;
+    }
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-        <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <div className="p-8">
+        <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6 md:p-8">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-2xl font-bold text-gray-900">
                 Apply for {job?.title}
@@ -945,7 +1140,6 @@ const handleAddComment = useCallback(async (e) => {
               <button
                 onClick={() => setShowApplicationModal(false)}
                 className="text-gray-400 hover:text-gray-600"
-                aria-label="Close modal"
               >
                 <FaTimes className="w-6 h-6" />
               </button>
@@ -953,176 +1147,360 @@ const handleAddComment = useCallback(async (e) => {
 
             <form onSubmit={handleSubmitApplication}>
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={applicationForm.full_name}
-                      onChange={handleInputChange("full_name")}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
-                      placeholder="John Doe"
-                      required
-                      disabled={uploadingResume}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email *
-                    </label>
-                    <input
-                      type="email"
-                      value={applicationForm.email}
-                      onChange={handleInputChange("email")}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
-                      placeholder="john@example.com"
-                      required
-                      disabled={uploadingResume}
-                    />
-                  </div>
-                </div>
-
+                {/* Personal Information */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    value={applicationForm.phone}
-                    onChange={handleInputChange("phone")}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
-                    placeholder="+1234567890"
-                    disabled={uploadingResume}
-                  />
-                </div>
-
-                {/* CV Section - Show existing CV if available */}
-                {userCV && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        {userCV.cv_type === 'application/pdf' ? (
-                          <FaFilePdf className="w-8 h-8 text-red-500" />
-                        ) : (
-                          <FaFileWord className="w-8 h-8 text-blue-500" />
-                        )}
-                        <div>
-                          <p className="font-medium text-gray-900">Your CV on file</p>
-                          <p className="text-sm text-gray-600">{userCV.cv_name}</p>
-                        </div>
-                      </div>
-                      <div className="text-xs text-green-700">Will be attached to your application</div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={applicationForm.full_name}
+                        onChange={handleInputChange("full_name")}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
+                        placeholder="John Doe"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Email *
+                      </label>
+                      <input
+                        type="email"
+                        value={applicationForm.email}
+                        onChange={handleInputChange("email")}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
+                        placeholder="john@example.com"
+                        required
+                      />
                     </div>
                   </div>
-                )}
 
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={applicationForm.phone}
+                      onChange={handleInputChange("phone")}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
+                      placeholder="+1234567890"
+                    />
+                  </div>
+                </div>
+
+                {/* CV Section */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Resume/CV *
+                    Curriculum Vitae (CV) *
                   </label>
-                  {applicationForm.resume_url ? (
-                    <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <FaFilePdf className="w-8 h-8 text-red-500" />
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            Resume uploaded
-                          </p>
-                          <p className="text-sm text-gray-500">Click to view</p>
+                  
+                  {hasExistingCV() ? (
+                    // User already has a CV on file - DISABLED
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          {userCV.cv_type === 'application/pdf' ? (
+                            <FaFilePdf className="w-8 h-8 text-red-500" />
+                          ) : (
+                            <FaFileWord className="w-8 h-8 text-blue-500" />
+                          )}
+                          <div>
+                            <p className="font-medium text-gray-900">CV Already on File</p>
+                            <p className="text-sm text-gray-600">{userCV.cv_name || 'CV Document'}</p>
+                            <p className="text-xs text-green-600 mt-1">
+                              ✓ This CV will be attached to your application
+                            </p>
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => window.open(userCV.cv_url, '_blank')}
+                          className="text-green-700 hover:text-green-900"
+                        >
+                          <FaDownload className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-green-200">
+                        <p className="text-xs text-gray-500">
+                          To update your CV, please go to your profile settings.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    // No CV - Show upload button
+                    <div>
+                      {applicationForm.cv_url ? (
+                        <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <FaFilePdf className="w-8 h-8 text-red-500" />
+                            <div>
+                              <p className="font-medium text-gray-900">CV Uploaded</p>
+                              <p className="text-sm text-gray-500">Click to view</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleInputChange("cv_url")({ target: { value: "" } })}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <FaTimes className="w-5 h-5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                          <FaUpload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                          <p className="text-gray-600 mb-2">Upload your CV (PDF or Word)</p>
+                          <input
+                            type="file"
+                            id="cv-upload"
+                            accept=".pdf,.doc,.docx"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) await handleUploadResume(file);
+                            }}
+                            disabled={uploadingResume}
+                          />
+                          <label
+                            htmlFor="cv-upload"
+                            className={`inline-flex items-center space-x-2 px-6 py-3 ${
+                              uploadingResume
+                                ? "bg-gray-300 cursor-not-allowed"
+                                : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
+                            } text-gray-700 rounded-lg transition-colors`}
+                          >
+                            <FaUpload className="w-5 h-5" />
+                            <span>{uploadingResume ? "Uploading..." : "Choose File"}</span>
+                          </label>
+                          <p className="text-xs text-gray-500 mt-2">Max file size: 5MB</p>
+                        </div>
+                      )}
+                      {uploadingResume && (
+                        <div className="mt-2">
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="bg-green-600 h-2 rounded-full animate-pulse"></div>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">Uploading...</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Required Documents Section */}
+                <div className="border-t border-gray-200 pt-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                    Required Documents
+                    <span className="text-red-500 text-sm ml-2">* Both required</span>
+                  </h4>
+                  
+                  {/* Recommendation Letter */}
+                  <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+                      <div>
+                        <h5 className="font-semibold text-gray-900">1. Recommendation Letter</h5>
+                        <p className="text-sm text-gray-600">Have the company acknowledge your internship request</p>
                       </div>
                       <button
                         type="button"
-                        onClick={() =>
-                          handleInputChange("resume_url")({
-                            target: { value: "" },
-                          })
-                        }
-                        className="text-red-600 hover:text-red-800"
-                        disabled={uploadingResume}
+                        onClick={() => handleDownloadTemplate(RECOMMENDATION_TEMPLATE_URL, "Regent_University_Internship_Template.pdf")}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors flex items-center space-x-2"
                       >
-                        <FaTimes className="w-5 h-5" />
+                        <FaDownload className="w-4 h-4" />
+                        <span>Download Template</span>
                       </button>
                     </div>
-                  ) : (
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
-                      <FaUpload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600 mb-2">
-                        Upload your resume (PDF or Word)
-                      </p>
-                      <input
-                        type="file"
-                        id="resume-upload"
-                        accept=".pdf,.doc,.docx"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (file) await handleUploadResume(file);
-                        }}
-                        disabled={uploadingResume}
-                      />
-                      <label
-                        htmlFor="resume-upload"
-                        className={`inline-flex items-center space-x-2 px-6 py-3 ${
-                          uploadingResume
-                            ? "bg-gray-300 cursor-not-allowed"
-                            : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
-                        } text-gray-700 rounded-lg transition-colors`}
-                      >
-                        <FaUpload className="w-5 h-5" />
-                        <span>
-                          {uploadingResume ? "Uploading..." : "Choose File"}
-                        </span>
+                    
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Upload Signed Recommendation Letter *
                       </label>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Max file size: 5MB
-                      </p>
+                      {applicationForm.recommendation_letter_url ? (
+                        <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-200">
+                          <div className="flex items-center space-x-3">
+                            <FaRegFilePdf className="w-6 h-6 text-red-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{applicationForm.recommendation_letter_name}</p>
+                              <p className="text-xs text-green-600">✓ Uploaded successfully</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setApplicationForm(prev => ({ ...prev, recommendation_letter_url: "", recommendation_letter_name: "" }));
+                              setRecommendationUploaded(false);
+                            }}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <FaTimes />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-blue-300 rounded-lg p-4 text-center">
+                          <input
+                            type="file"
+                            id="recommendation-upload"
+                            accept=".pdf,.doc,.docx"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) await handleUploadRecommendation(file);
+                            }}
+                            disabled={uploadingRecommendation}
+                          />
+                          <label
+                            htmlFor="recommendation-upload"
+                            className="cursor-pointer flex items-center justify-center space-x-2 text-blue-600 hover:text-blue-700"
+                          >
+                            <FaUpload className="w-5 h-5" />
+                            <span>{uploadingRecommendation ? "Uploading..." : "Click to upload signed letter"}</span>
+                          </label>
+                          <p className="text-xs text-gray-500 mt-2">PDF or Word document, max 5MB</p>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {uploadingResume && (
-                    <div className="mt-2">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-green-600 h-2 rounded-full animate-pulse"></div>
+                  </div>
+                  
+                  {/* Evaluation Form */}
+                  <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+                      <div>
+                        <h5 className="font-semibold text-gray-900">2. Internship Evaluation Form</h5>
+                        <p className="text-sm text-gray-600">To be filled by the supervising officer</p>
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">Uploading...</p>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadTemplate(EVALUATION_TEMPLATE_URL, "Internship_Evaluation_Form.pdf")}
+                        className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 transition-colors flex items-center space-x-2"
+                      >
+                        <FaDownload className="w-4 h-4" />
+                        <span>Download Template</span>
+                      </button>
                     </div>
-                  )}
+                    
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Upload Completed Evaluation Form *
+                      </label>
+                      {applicationForm.evaluation_letter_url ? (
+                        <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-purple-200">
+                          <div className="flex items-center space-x-3">
+                            <FaRegFilePdf className="w-6 h-6 text-red-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{applicationForm.evaluation_letter_name}</p>
+                              <p className="text-xs text-green-600">✓ Uploaded successfully</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setApplicationForm(prev => ({ ...prev, evaluation_letter_url: "", evaluation_letter_name: "" }));
+                              setEvaluationUploaded(false);
+                            }}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <FaTimes />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-purple-300 rounded-lg p-4 text-center">
+                          <input
+                            type="file"
+                            id="evaluation-upload"
+                            accept=".pdf,.doc,.docx"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) await handleUploadEvaluation(file);
+                            }}
+                            disabled={uploadingEvaluation}
+                          />
+                          <label
+                            htmlFor="evaluation-upload"
+                            className="cursor-pointer flex items-center justify-center space-x-2 text-purple-600 hover:text-purple-700"
+                          >
+                            <FaUpload className="w-5 h-5" />
+                            <span>{uploadingEvaluation ? "Uploading..." : "Click to upload completed form"}</span>
+                          </label>
+                          <p className="text-xs text-gray-500 mt-2">PDF or Word document, max 5MB</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
+                {/* Cover Letter */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cover Letter
+                    Cover Letter (Optional)
                   </label>
                   <textarea
                     value={applicationForm.cover_letter}
                     onChange={handleInputChange("cover_letter")}
-                    rows="6"
+                    rows="4"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent resize-none"
                     placeholder="Tell us why you're a great fit for this position..."
-                    disabled={uploadingResume}
                   />
                 </div>
 
+                {/* Document Status Summary */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h5 className="font-semibold text-gray-900 mb-2">Application Requirements Status:</h5>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span>CV/Resume:</span>
+                      <span className={cvUploaded ? "text-green-600" : "text-red-500"}>
+                        {cvUploaded ? "✓ Uploaded" : hasExistingCV() ? "✓ On File" : "✗ Required"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Recommendation Letter:</span>
+                      <span className={recommendationUploaded ? "text-green-600" : "text-red-500"}>
+                        {recommendationUploaded ? "✓ Uploaded" : "✗ Required"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Evaluation Form:</span>
+                      <span className={evaluationUploaded ? "text-green-600" : "text-red-500"}>
+                        {evaluationUploaded ? "✓ Uploaded" : "✗ Required"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submit Button */}
                 <div className="flex justify-end space-x-4 pt-4">
                   <button
                     type="button"
                     onClick={() => setShowApplicationModal(false)}
                     className="px-6 py-3 text-gray-600 hover:text-gray-900 font-medium"
-                    disabled={uploadingResume}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={!applicationForm.resume_url || uploadingResume}
-                    className="px-6 py-3 bg-green-900 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-400 font-medium transition-colors flex items-center space-x-2"
+                    disabled={!isFormComplete}
+                    className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center space-x-2 ${
+                      isFormComplete
+                        ? "bg-gradient-to-r from-green-900 to-green-800 hover:from-green-800 hover:to-green-700 text-white hover:scale-105 shadow-lg"
+                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    }`}
                   >
                     <FaPaperPlane className="w-5 h-5" />
                     <span>Submit Application</span>
                   </button>
                 </div>
+                
+                {!isFormComplete && (
+                  <p className="text-xs text-red-500 text-center mt-2">
+                    Please upload all required documents (CV, Recommendation Letter, and Evaluation Form) before submitting.
+                  </p>
+                )}
               </div>
             </form>
           </div>
@@ -1134,10 +1512,23 @@ const handleAddComment = useCallback(async (e) => {
     job,
     applicationForm,
     uploadingResume,
+    uploadingRecommendation,
+    uploadingEvaluation,
     userCV,
+    hasExistingCV,
+    cvUploaded,
+    recommendationUploaded,
+    evaluationUploaded,
+    isFormComplete,
+    isDeadlinePassed,
     handleSubmitApplication,
     handleInputChange,
     handleUploadResume,
+    handleUploadRecommendation,
+    handleUploadEvaluation,
+    handleDownloadTemplate,
+    RECOMMENDATION_TEMPLATE_URL,
+    EVALUATION_TEMPLATE_URL,
   ]);
 
   if (loading) {
@@ -1371,6 +1762,41 @@ const handleAddComment = useCallback(async (e) => {
                 </div>
               </div>
 
+              {/* Deadline Warning Banner */}
+              {isDeadlinePassed && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
+                  <div className="flex items-center space-x-3">
+                    <FaLock className="w-6 h-6 text-red-600" />
+                    <div>
+                      <h4 className="text-lg font-semibold text-red-800 mb-1">
+                        Applications Closed
+                      </h4>
+                      <p className="text-red-700">
+                        The application deadline for this position has passed. 
+                        Applications are no longer being accepted.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {isDeadlinePassed && !userHasApplied && (
+                <div className="bg-gray-100 rounded-2xl p-6 border border-gray-300">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                        Application Period Ended
+                      </h3>
+                      <p className="text-gray-600">
+                        This position is no longer accepting applications. 
+                        Check back for future opportunities!
+                      </p>
+                    </div>
+                    <FaLock className="w-8 h-8 text-gray-500" />
+                  </div>
+                </div>
+              )}
+
               {userHasApplied && (
                 <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
                   <div className="flex items-center justify-between">
@@ -1424,7 +1850,7 @@ const handleAddComment = useCallback(async (e) => {
                 </div>
               )}
 
-              {!userHasApplied && (
+              {!userHasApplied && !isDeadlinePassed && (
                 <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
                   <div className="flex items-center justify-between">
                     <div>
@@ -1454,9 +1880,11 @@ const handleAddComment = useCallback(async (e) => {
                 </div>
                 <div className="p-4 bg-white rounded-xl border border-gray-200">
                   <div className="text-2xl font-bold text-gray-900">
-                    {getDaysRemaining(job.deadline)}
+                    {isDeadlineExpired(job.deadline) ? 0 : getDaysRemaining(job.deadline)}
                   </div>
-                  <div className="text-sm text-gray-600">Days Left</div>
+                  <div className="text-sm text-gray-600">
+                    {isDeadlineExpired(job.deadline) ? "Expired" : "Days Left"}
+                  </div>
                 </div>
                 <div className="p-4 bg-white rounded-xl border border-gray-200">
                   <div className="text-2xl font-bold text-gray-900">98%</div>
@@ -1563,7 +1991,7 @@ const handleAddComment = useCallback(async (e) => {
                       "Flexible work arrangements",
                       "Health insurance coverage",
                       "Performance bonuses",
-                      "payment not guaranteed",
+                      "Payment not guaranteed",
                       "Team building activities",
                     ].map((benefit, index) => (
                       <div key={index} className="flex items-center space-x-3">
@@ -1575,155 +2003,148 @@ const handleAddComment = useCallback(async (e) => {
                 </div>
               )}
 
-{activeTab === "reviews" && (
-  <div className="prose prose-lg max-w-none">
-    <h3 className="text-2xl font-bold text-gray-900 mb-6">
-      Reviews & Feedback ({comments.length})
-    </h3>
-    
- 
-
-    {/* Add Review Form */}
-    <div className="bg-gray-50 rounded-xl p-6 mb-6">
-      <h4 className="text-lg font-semibold text-gray-900 mb-4">
-        Share Your Experience
-      </h4>
-      <form onSubmit={handleAddComment} className="space-y-4">
-        <div className="flex items-center space-x-2 mb-4">
-          {[1, 2, 3, 4, 5].map((star) => (
-            <button
-              key={star}
-              type="button"
-              onClick={() => handleRatingChange(star)}
-              className={`text-2xl ${
-                star <= rating ? "text-yellow-400" : "text-gray-300"
-              } hover:text-yellow-500 transition-colors`}
-            >
-              <FaStar />
-            </button>
-          ))}
-          <span className="text-sm text-gray-600 ml-2">
-            {rating} out of 5
-          </span>
-        </div>
-        <textarea
-          value={newComment}
-          onChange={handleNewCommentChange}
-          rows="4"
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent resize-none"
-          placeholder="Share your thoughts about this opportunity..."
-          disabled={commentLoading}
-        />
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={!newComment.trim() || commentLoading}
-            className="px-6 py-3 bg-green-900 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-400 font-medium transition-colors flex items-center space-x-2"
-          >
-            <FaComment className="w-5 h-5" />
-            <span>{commentLoading ? "Posting..." : "Post Review"}</span>
-          </button>
-        </div>
-      </form>
-    </div>
-
-    {/* Reviews List */}
-    <div className="space-y-6">
-      {comments.length === 0 ? (
-        <div className="text-center py-8">
-          <FaComment className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-600">No reviews yet. Be the first to share your experience!</p>
-        </div>
-      ) : (
-        comments.map((comment) => {
-          const userName = comment.user_display_name || 
-                         comment.profiles?.name || 
-                         'Anonymous';
-          
-          const userAvatar = comment.user_avatar_url || 
-                           comment.profiles?.avatar_url;
-          
-          const isCurrentUser = comment.is_current_user;
-          
-          console.log(`📋 Rendering comment ${comment.id}:`, {
-            userName,
-            userAvatar,
-            storedName: comment.user_display_name,
-            userId: comment.user_id
-          });
-
-          return (
-            <div key={comment.id} className="border-b border-gray-200 pb-6 last:border-0">
-              <div className="flex items-start space-x-3 mb-3">
-                <div className="flex-shrink-0">
-                  {userAvatar ? (
-                    <img
-                      src={userAvatar}
-                      alt={userName}
-                      className="w-10 h-10 rounded-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        const parent = e.target.parentElement;
-                        parent.innerHTML = `
-                          <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-green-900" fill="currentColor" viewBox="0 0 20 20">
-                              <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
-                            </svg>
-                          </div>
-                        `;
-                      }}
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                      <FaUser className="w-5 h-5 text-green-900" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <h4 className="font-semibold text-gray-900">
-                        {userName}
-                      </h4>
-                      {isCurrentUser && (
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-                          You
+              {activeTab === "reviews" && (
+                <div className="prose prose-lg max-w-none">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-6">
+                    Reviews & Feedback ({comments.length})
+                  </h3>
+                  
+                  {/* Add Review Form */}
+                  <div className="bg-gray-50 rounded-xl p-6 mb-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                      Share Your Experience
+                    </h4>
+                    <form onSubmit={handleAddComment} className="space-y-4">
+                      <div className="flex items-center space-x-2 mb-4">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => handleRatingChange(star)}
+                            className={`text-2xl ${
+                              star <= rating ? "text-yellow-400" : "text-gray-300"
+                            } hover:text-yellow-500 transition-colors`}
+                          >
+                            <FaStar />
+                          </button>
+                        ))}
+                        <span className="text-sm text-gray-600 ml-2">
+                          {rating} out of 5
                         </span>
-                      )}
-                      {comment.user_email && !isCurrentUser && (
-                        <span className="text-xs text-gray-500">
-                          ({comment.user_email})
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-sm text-gray-500">
-                      {new Date(comment.created_at).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-1 mb-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <FaStar
-                        key={star}
-                        className={`w-4 h-4 ${
-                          star <= comment.rating ? "text-yellow-400" : "text-gray-300"
-                        }`}
+                      </div>
+                      <textarea
+                        value={newComment}
+                        onChange={handleNewCommentChange}
+                        rows="4"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent resize-none"
+                        placeholder="Share your thoughts about this opportunity..."
+                        disabled={commentLoading}
                       />
-                    ))}
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={!newComment.trim() || commentLoading}
+                          className="px-6 py-3 bg-green-900 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-400 font-medium transition-colors flex items-center space-x-2"
+                        >
+                          <FaComment className="w-5 h-5" />
+                          <span>{commentLoading ? "Posting..." : "Post Review"}</span>
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                  <p className="text-gray-700 whitespace-pre-line">{comment.content}</p>
+
+                  {/* Reviews List */}
+                  <div className="space-y-6">
+                    {comments.length === 0 ? (
+                      <div className="text-center py-8">
+                        <FaComment className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-600">No reviews yet. Be the first to share your experience!</p>
+                      </div>
+                    ) : (
+                      comments.map((comment) => {
+                        const userName = comment.user_display_name || 
+                                       comment.profiles?.name || 
+                                       'Anonymous';
+                        
+                        const userAvatar = comment.user_avatar_url || 
+                                         comment.profiles?.avatar_url;
+                        
+                        const isCurrentUser = comment.is_current_user;
+
+                        return (
+                          <div key={comment.id} className="border-b border-gray-200 pb-6 last:border-0">
+                            <div className="flex items-start space-x-3 mb-3">
+                              <div className="flex-shrink-0">
+                                {userAvatar ? (
+                                  <img
+                                    src={userAvatar}
+                                    alt={userName}
+                                    className="w-10 h-10 rounded-full object-cover"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      const parent = e.target.parentElement;
+                                      if (parent) {
+                                        parent.innerHTML = `
+                                          <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                                            <svg class="w-5 h-5 text-green-900" fill="currentColor" viewBox="0 0 20 20">
+                                              <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                                            </svg>
+                                          </div>
+                                        `;
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                                    <FaUser className="w-5 h-5 text-green-900" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-2">
+                                    <h4 className="font-semibold text-gray-900">
+                                      {userName}
+                                    </h4>
+                                    {isCurrentUser && (
+                                      <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                                        You
+                                      </span>
+                                    )}
+                                    {comment.user_email && !isCurrentUser && (
+                                      <span className="text-xs text-gray-500">
+                                        ({comment.user_email})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-sm text-gray-500">
+                                    {new Date(comment.created_at).toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric'
+                                    })}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-1 mb-2">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <FaStar
+                                      key={star}
+                                      className={`w-4 h-4 ${
+                                        star <= comment.rating ? "text-yellow-400" : "text-gray-300"
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                                <p className="text-gray-700 whitespace-pre-line">{comment.content}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              </div>
-            </div>
-          );
-        })
-      )}
-    </div>
-  </div>
-)}
+              )}
             </div>
 
             {userHasApplied && (

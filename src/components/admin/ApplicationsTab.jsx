@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
-  FaSearch, FaSync, FaEye, FaCheckCircle, 
-  FaTimesCircle, FaClipboardCheck, FaEllipsisH,
-  FaClock, FaStar, FaCommentDots
+  FaEye, FaCheck, FaTimes, FaDownload, FaFilePdf, 
+  FaFileWord, FaUser, FaEnvelope, FaPhone, FaBriefcase, 
+  FaCalendarAlt, FaBuilding, FaMapMarkerAlt, FaClock,
+  FaFileAlt, FaFileSignature, FaAward, FaExternalLinkAlt
 } from 'react-icons/fa';
-import { format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 
 const ApplicationsTab = ({
   applications,
-  filteredApplications,
   applicationSearchTerm,
   setApplicationSearchTerm,
   applicationStatusFilter,
@@ -20,214 +20,325 @@ const ApplicationsTab = ({
   acceptApplication,
   rejectApplication
 }) => {
-  const [localFilteredApps, setLocalFilteredApps] = useState([]);
+  const [expandedApplication, setExpandedApplication] = useState(null);
 
-  useEffect(() => {
-    let filtered = applications;
+  // Filter applications based on search term and status
+  const filteredApplications = applications.filter(app => {
+    const matchesSearch = 
+      app.full_name?.toLowerCase().includes(applicationSearchTerm.toLowerCase()) ||
+      app.email?.toLowerCase().includes(applicationSearchTerm.toLowerCase()) ||
+      app.jobs?.title?.toLowerCase().includes(applicationSearchTerm.toLowerCase()) ||
+      app.jobs?.company?.toLowerCase().includes(applicationSearchTerm.toLowerCase());
+    
+    const matchesStatus = applicationStatusFilter === 'all' || app.status === applicationStatusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
-    if (applicationSearchTerm) {
-      filtered = filtered.filter(app =>
-        app.full_name?.toLowerCase().includes(applicationSearchTerm.toLowerCase()) ||
-        app.email?.toLowerCase().includes(applicationSearchTerm.toLowerCase()) ||
-        app.jobs?.title?.toLowerCase().includes(applicationSearchTerm.toLowerCase())
-      );
-    }
-
-    if (applicationStatusFilter !== 'all') {
-      filtered = filtered.filter(app => app.status === applicationStatusFilter);
-    }
-
-    setLocalFilteredApps(filtered);
-  }, [applicationSearchTerm, applications, applicationStatusFilter]);
-
-  const getStatusColor = (status) => {
-    const colors = {
-      pending: 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200',
-      reviewed: 'bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 border border-blue-200',
-      shortlisted: 'bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200',
-      interviewed: 'bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 border border-indigo-200',
-      offered: 'bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border border-emerald-200',
-      accepted: 'bg-gradient-to-r from-green-50 to-green-50 text-green-700 border border-green-200',
-      rejected: 'bg-gradient-to-r from-rose-50 to-red-50 text-rose-700 border border-rose-200'
+  const getStatusBadge = (status) => {
+    const badges = {
+      pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      reviewed: 'bg-blue-100 text-blue-800 border-blue-200',
+      shortlisted: 'bg-purple-100 text-purple-800 border-purple-200',
+      interviewed: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      offered: 'bg-green-100 text-green-800 border-green-200',
+      accepted: 'bg-green-100 text-green-800 border-green-200',
+      rejected: 'bg-red-100 text-red-800 border-red-200'
     };
-    return colors[status] || 'bg-gradient-to-r from-gray-50 to-gray-50 text-gray-700';
+    return badges[status] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
 
-  const getStatusIcon = (status) => {
-    const icons = {
-      pending: FaClock,
-      reviewed: FaEye,
-      shortlisted: FaStar,
-      interviewed: FaCommentDots,
-      offered: FaCheckCircle,
-      accepted: FaCheckCircle,
-      rejected: FaTimesCircle
-    };
-    return icons[status] || FaClock;
+  const handleViewDetails = (application) => {
+    setSelectedApplication(application);
+    setShowApplicationDetails(true);
   };
+
+  const toggleExpand = (applicationId) => {
+    setExpandedApplication(expandedApplication === applicationId ? null : applicationId);
+  };
+
+  const handleDownload = async (url, fileName) => {
+    if (!url) {
+      alert('No file available');
+      return;
+    }
+    
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      alert('Failed to download file');
+    }
+  };
+
+  const getFileIcon = (url) => {
+    if (!url) return null;
+    if (url.includes('.pdf')) return <FaFilePdf className="text-red-500" />;
+    return <FaFileWord className="text-blue-500" />;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-green-900 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading applications...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Applications Header with Filters */}
-      <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg p-6 border border-gray-100">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-2">
-            <div className="relative">
-              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search applicants by name, email, or job title..."
-                value={applicationSearchTerm}
-                onChange={(e) => setApplicationSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-300"
-                onKeyDown={(e) => e.stopPropagation()}
-              />
-            </div>
-          </div>
-          
-          <div>
-            <select
-              value={applicationStatusFilter}
-              onChange={(e) => setApplicationStatusFilter(e.target.value)}
-              className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 appearance-none transition-all duration-300"
-              onKeyDown={(e) => e.stopPropagation()}
-            >
-              <option value="all">All Status</option>
-              <option value="pending">⏳ Pending</option>
-              <option value="reviewed">👁️ Reviewed</option>
-              <option value="shortlisted">⭐ Shortlisted</option>
-              <option value="interviewed">💬 Interviewed</option>
-              <option value="offered">💰 Offered</option>
-              <option value="accepted">✅ Accepted</option>
-              <option value="rejected">❌ Rejected</option>
-            </select>
-          </div>
-
-          <button
-            onClick={() => {
-              setApplicationSearchTerm('');
-              setApplicationStatusFilter('all');
-            }}
-            className="w-full px-4 py-2.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-xl font-medium transition-all duration-300 hover:shadow-sm"
-          >
-            Clear Filters
-          </button>
+    <div>
+      {/* Filters */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="Search by name, email, job title, or company..."
+            value={applicationSearchTerm}
+            onChange={(e) => setApplicationSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
+          />
         </div>
+        <div>
+          <select
+            value={applicationStatusFilter}
+            onChange={(e) => setApplicationStatusFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
+          >
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="shortlisted">Shortlisted</option>
+            <option value="interviewed">Interviewed</option>
+            <option value="offered">Offered</option>
+            <option value="accepted">Accepted</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <button
+          onClick={fetchApplications}
+          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          Refresh
+        </button>
       </div>
 
       {/* Applications List */}
-      {loading ? (
-        <div className="p-12 text-center">
-          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading applications...</p>
-        </div>
-      ) : localFilteredApps.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-12 text-center">
-          <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-2xl flex items-center justify-center">
-            <FaClipboardCheck className="w-10 h-10 text-blue-500" />
+      <div className="space-y-4">
+        {filteredApplications.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 rounded-xl">
+            <FaFileAlt className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500 text-lg">No applications found</p>
+            <p className="text-gray-400 text-sm mt-1">Try adjusting your search or filter</p>
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-2">
-            {applications.length === 0 ? 'No Applications Yet' : 'No Applications Found'}
-          </h3>
-          <p className="text-gray-600 mb-6 max-w-md mx-auto">
-            {applications.length === 0 
-              ? "No candidates have applied for jobs yet. Check back later." 
-              : "No applications match your current filters. Try adjusting your search criteria."}
-          </p>
-          <button
-            onClick={fetchApplications}
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-300"
-          >
-            Refresh Applications
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {localFilteredApps.map((application) => {
-            const StatusIcon = getStatusIcon(application.status);
-            return (
-              <div key={application.id} className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h4 className="font-bold text-gray-900">{application.full_name || 'Anonymous Applicant'}</h4>
-                      <p className="text-sm text-gray-600">{application.email}</p>
-                      <div className="mt-2">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(application.status)}`}>
-                          <StatusIcon className="w-3 h-3 mr-2" />
-                          {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
-                        </span>
+        ) : (
+          filteredApplications.map((app) => (
+            <div key={app.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-300">
+              {/* Application Header */}
+              <div className="p-5 cursor-pointer" onClick={() => toggleExpand(app.id)}>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className="w-10 h-10 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full flex items-center justify-center">
+                        <FaUser className="w-5 h-5 text-green-900" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 text-lg">
+                          {app.full_name || 'Unknown'}
+                        </h3>
+                        <p className="text-sm text-gray-500">{app.email}</p>
                       </div>
                     </div>
-                    <button className="text-gray-400 hover:text-gray-600">
-                      <FaEllipsisH className="w-5 h-5" />
-                    </button>
+                    <div className="flex flex-wrap gap-3 mt-2">
+                      <div className="flex items-center space-x-1 text-sm text-gray-600">
+                        <FaBriefcase className="w-4 h-4" />
+                        <span>{app.jobs?.title || 'Position not specified'}</span>
+                      </div>
+                      <div className="flex items-center space-x-1 text-sm text-gray-600">
+                        <FaBuilding className="w-4 h-4" />
+                        <span>{app.jobs?.company || 'Company not specified'}</span>
+                      </div>
+                      <div className="flex items-center space-x-1 text-sm text-gray-600">
+                        <FaClock className="w-4 h-4" />
+                        <span>Applied {formatDistanceToNow(new Date(app.created_at), { addSuffix: true })}</span>
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="mb-6">
-                    <p className="font-medium text-gray-900 mb-1">{application.jobs?.title || 'Unknown Position'}</p>
-                    <p className="text-sm text-gray-600">{application.jobs?.company || 'Unknown Company'}</p>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Applied {format(new Date(application.created_at), 'MMM dd, yyyy')}
-                    </p>
-                  </div>
-
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => {
-                        setSelectedApplication(application);
-                        setShowApplicationDetails(true);
-                      }}
-                      className="flex-1 flex items-center justify-center space-x-2 py-2.5 bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 rounded-lg font-medium transition-all duration-300 hover:shadow-sm"
-                    >
-                      <FaEye className="w-4 h-4" />
-                      <span>Review</span>
-                    </button>
-                    <button
-                      onClick={() => acceptApplication(application.id)}
-                      className="px-3 py-2.5 bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 rounded-lg transition-all duration-300 hover:shadow-sm"
-                      title="Accept"
-                    >
-                      <FaCheckCircle className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => rejectApplication(application.id)}
-                      className="px-3 py-2.5 bg-gradient-to-r from-rose-50 to-red-50 text-rose-700 rounded-lg transition-all duration-300 hover:shadow-sm"
-                      title="Reject"
-                    >
-                      <FaTimesCircle className="w-4 h-4" />
-                    </button>
+                  
+                  <div className="flex items-center space-x-3">
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadge(app.status)}`}>
+                      {app.status?.charAt(0).toUpperCase() + app.status?.slice(1)}
+                    </span>
+                    
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewDetails(app);
+                        }}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="View Full Details"
+                      >
+                        <FaEye className="w-5 h-5" />
+                      </button>
+                      
+                      {app.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm('Accept this application?')) {
+                                acceptApplication(app.id);
+                              }
+                            }}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="Accept"
+                          >
+                            <FaCheck className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm('Reject this application?')) {
+                                rejectApplication(app.id);
+                              }
+                            }}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Reject"
+                          >
+                            <FaTimes className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
 
-      {/* Applications Stats */}
-      {localFilteredApps.length > 0 && (
-        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900">{localFilteredApps.length}</p>
-              <p className="text-sm text-gray-600">Showing</p>
+              {/* Expanded Document Details */}
+              {expandedApplication === app.id && (
+                <div className="border-t border-gray-200 bg-gray-50 p-5">
+                  <h4 className="font-semibold text-gray-900 mb-4">Application Documents</h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* CV Section */}
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <div className="flex items-center space-x-2 mb-3">
+                        <FaFileAlt className="w-5 h-5 text-green-600" />
+                        <h5 className="font-medium text-gray-900">Curriculum Vitae (CV)</h5>
+                      </div>
+                      {app.cv_url || app.resume_url ? (
+                        <div>
+                          <div className="flex items-center space-x-2 mb-2">
+                            {getFileIcon(app.cv_url || app.resume_url)}
+                            <span className="text-sm text-gray-600 truncate flex-1">
+                              {app.cv_url?.split('/').pop() || app.resume_url?.split('/').pop() || 'CV Document'}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDownload(app.cv_url || app.resume_url, 'CV_Document.pdf')}
+                            className="w-full mt-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center space-x-2 text-sm"
+                          >
+                            <FaDownload className="w-4 h-4" />
+                            <span>Download CV</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">No CV uploaded</p>
+                      )}
+                    </div>
+
+                    {/* Recommendation Letter Section */}
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <div className="flex items-center space-x-2 mb-3">
+                        <FaFileSignature className="w-5 h-5 text-blue-600" />
+                        <h5 className="font-medium text-gray-900">Recommendation Letter</h5>
+                      </div>
+                      {app.recommendation_letter_url ? (
+                        <div>
+                          <div className="flex items-center space-x-2 mb-2">
+                            {getFileIcon(app.recommendation_letter_url)}
+                            <span className="text-sm text-gray-600 truncate flex-1">
+                              {app.recommendation_letter_name || 'Recommendation Letter'}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDownload(app.recommendation_letter_url, app.recommendation_letter_name || 'Recommendation_Letter.pdf')}
+                            className="w-full mt-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center space-x-2 text-sm"
+                          >
+                            <FaDownload className="w-4 h-4" />
+                            <span>Download Letter</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">No recommendation letter uploaded</p>
+                      )}
+                    </div>
+
+                    {/* Evaluation Form Section */}
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <div className="flex items-center space-x-2 mb-3">
+                        <FaAward className="w-5 h-5 text-purple-600" />
+                        <h5 className="font-medium text-gray-900">Evaluation Form</h5>
+                      </div>
+                      {app.evaluation_letter_url ? (
+                        <div>
+                          <div className="flex items-center space-x-2 mb-2">
+                            {getFileIcon(app.evaluation_letter_url)}
+                            <span className="text-sm text-gray-600 truncate flex-1">
+                              {app.evaluation_letter_name || 'Evaluation Form'}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDownload(app.evaluation_letter_url, app.evaluation_letter_name || 'Evaluation_Form.pdf')}
+                            className="w-full mt-2 px-3 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors flex items-center justify-center space-x-2 text-sm"
+                          >
+                            <FaDownload className="w-4 h-4" />
+                            <span>Download Form</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">No evaluation form uploaded</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Additional Info */}
+                  {(app.phone || app.cover_letter) && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      {app.phone && (
+                        <div className="flex items-center space-x-2 mb-2">
+                          <FaPhone className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm text-gray-700">{app.phone}</span>
+                        </div>
+                      )}
+                      {app.cover_letter && (
+                        <div className="mt-2">
+                          <p className="text-sm font-medium text-gray-700 mb-1">Cover Letter:</p>
+                          <p className="text-sm text-gray-600 bg-white p-3 rounded-lg border border-gray-200">
+                            {app.cover_letter}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-yellow-600">{applications.filter(a => a.status === 'pending').length}</p>
-              <p className="text-sm text-gray-600">Pending</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">{applications.filter(a => a.status === 'accepted').length}</p>
-              <p className="text-sm text-gray-600">Accepted</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-red-600">{applications.filter(a => a.status === 'rejected').length}</p>
-              <p className="text-sm text-gray-600">Rejected</p>
-            </div>
-          </div>
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 };

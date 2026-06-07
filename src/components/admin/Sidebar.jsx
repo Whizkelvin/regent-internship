@@ -15,9 +15,7 @@ const Sidebar = ({
   sidebarOpen 
 }) => {
   const tabs = [
-    { id: 'jobs', label: 'Manage Jobs', icon: FaBriefcase, badge: stats.total },
-    { id: 'applications', label: 'Applications', icon: FaClipboardCheck, badge: stats.pendingApplications, color: 'bg-yellow-500' },
-    { id: 'messages', label: 'Messages', icon: FaInbox, badge: stats.unreadMessages, color: 'bg-red-500' },
+    
     { id: 'users', label: 'User Management', icon: FaUserShield, badge: stats.users }
   ];
 
@@ -26,7 +24,7 @@ const Sidebar = ({
       <div className="p-6 h-full flex flex-col ">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-white pt-16">Admin Hub</h2>
-          <p className="text-emerald-200 text-sm mt-1">Dashboard v2.0</p>
+         
         </div>
 
         <nav className="space-y-1 flex-1">
@@ -61,13 +59,7 @@ const Sidebar = ({
           </div>
           
           <div className="pt-6 border-t border-emerald-800">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center space-x-3 w-full p-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-lg transition-all duration-300 group"
-            >
-              <FaPlus className="w-5 h-5" />
-              <span>Add New Job</span>
-            </button>
+           
             
       
 
