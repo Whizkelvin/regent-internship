@@ -383,8 +383,7 @@ const Signup = () => {
         return "Join as a student to access internship opportunities and career resources";
       case "company":
         return "Register your company to post internships and connect with talented students";
-      case "admin":
-        return "Administrator access for managing platform operations";
+      
       default:
         return "Select your role to get started";
     }
@@ -436,7 +435,7 @@ const Signup = () => {
                         <option value="">Select Your Role</option>
                         <option value="student">Student</option>
                         <option value="company">Company Representative</option>
-                        <option value="admin">Administrator</option>
+                        
                       </select>
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         {getRoleIcon()}
