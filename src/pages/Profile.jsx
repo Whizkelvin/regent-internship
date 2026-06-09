@@ -37,9 +37,11 @@ const Profile = () => {
   const [preview, setPreview] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   // Edit form state
   const [editForm, setEditForm] = useState({
+    full_name: "",
     name: "",
     phone: "",
     program: "",
@@ -62,55 +64,71 @@ const Profile = () => {
   useEffect(() => {
     if (!user) return;
     const fetchProfile = async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
 
-      if (!error && data) {
-        setProfile(data);
-        setPreview(data.profile_pic || null);
+        // Get user metadata from auth
+        const userMetadata = user.user_metadata || {};
         
-        // Populate edit form with existing data
-        setEditForm({
-          name: user.user_metadata?.name || data.name || "",
-          phone: user.user_metadata?.phone || data.phone || "",
-          program: user.user_metadata?.program || data.program || "",
-          student_id: user.user_metadata?.student_id || data.student_id || "",
-          graduation_year: user.user_metadata?.graduation_year || data.graduation_year || "",
-          bio: data.bio || "",
-          location: data.location || "",
-          date_of_birth: data.date_of_birth || "",
-          gender: data.gender || "",
-          skills: data.skills || "",
-          linkedin: data.linkedin || "",
-          github: data.github || "",
-          twitter: data.twitter || "",
-          portfolio: data.portfolio || "",
-          employment_status: data.employment_status || "",
-          major: data.major || user.user_metadata?.program || ""
-        });
-      } else {
-        // Initialize with user metadata if profile doesn't exist
-        setEditForm({
-          name: user.user_metadata?.name || "",
-          phone: user.user_metadata?.phone || "",
-          program: user.user_metadata?.program || "",
-          student_id: user.user_metadata?.student_id || "",
-          graduation_year: user.user_metadata?.graduation_year || "",
-          bio: "",
-          location: "",
-          date_of_birth: "",
-          gender: "",
-          skills: "",
-          linkedin: "",
-          github: "",
-          twitter: "",
-          portfolio: "",
-          employment_status: "",
-          major: user.user_metadata?.program || ""
-        });
+        if (!error && data) {
+          setProfile(data);
+          setPreview(data.profile_pic || userMetadata.avatar_url || null);
+          
+          // Populate edit form with existing data - prioritize profile data over metadata
+          const fullName = data.full_name || userMetadata.full_name || userMetadata.name || "";
+          
+          setEditForm({
+            full_name: fullName,
+            name: fullName,
+            phone: data.phone || userMetadata.phone || "",
+            program: data.program || userMetadata.program || "",
+            student_id: data.student_id || userMetadata.student_id || "",
+            graduation_year: data.graduation_year || userMetadata.graduation_year || "",
+            bio: data.bio || "",
+            location: data.location || "",
+            date_of_birth: data.date_of_birth || "",
+            gender: data.gender || "",
+            skills: data.skills || "",
+            linkedin: data.linkedin || "",
+            github: data.github || "",
+            twitter: data.twitter || "",
+            portfolio: data.portfolio || "",
+            employment_status: data.employment_status || "",
+            major: data.major || userMetadata.program || data.program || ""
+          });
+        } else {
+          // Initialize with user metadata if profile doesn't exist
+          const fullName = userMetadata.full_name || userMetadata.name || user.email?.split('@')[0] || "User";
+          
+          setEditForm({
+            full_name: fullName,
+            name: fullName,
+            phone: userMetadata.phone || "",
+            program: userMetadata.program || "",
+            student_id: userMetadata.student_id || "",
+            graduation_year: userMetadata.graduation_year || "",
+            bio: "",
+            location: "",
+            date_of_birth: "",
+            gender: "",
+            skills: "",
+            linkedin: "",
+            github: "",
+            twitter: "",
+            portfolio: "",
+            employment_status: "",
+            major: userMetadata.program || ""
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+      } finally {
+        setLoading(false);
       }
     };
     fetchProfile();
@@ -156,7 +174,7 @@ const Profile = () => {
 
       // Update Auth metadata (optional)
       const { error: authError } = await supabase.auth.updateUser({
-        data: { profile_pic: publicURL },
+        data: { avatar_url: publicURL },
       });
       if (authError) throw authError;
 
@@ -181,7 +199,8 @@ const Profile = () => {
       // Update user metadata in auth
       const { error: authError } = await supabase.auth.updateUser({
         data: {
-          name: editForm.name,
+          full_name: editForm.full_name,
+          name: editForm.full_name,
           phone: editForm.phone,
           program: editForm.program,
           student_id: editForm.student_id,
@@ -196,7 +215,8 @@ const Profile = () => {
         .from("profiles")
         .upsert({
           id: user.id,
-          name: editForm.name,
+          full_name: editForm.full_name,
+          name: editForm.full_name,
           phone: editForm.phone,
           program: editForm.program,
           student_id: editForm.student_id,
@@ -241,7 +261,7 @@ const Profile = () => {
 
   const calculateProfileCompleteness = () => {
     const fields = [
-      editForm.name, editForm.phone, editForm.program, 
+      editForm.full_name, editForm.phone, editForm.program, 
       editForm.student_id, editForm.graduation_year, editForm.bio,
       editForm.location, editForm.skills
     ];
@@ -250,6 +270,43 @@ const Profile = () => {
   };
 
   const profileCompleteness = calculateProfileCompleteness();
+
+  // Get display name
+  const getDisplayName = () => {
+    if (editForm.full_name) return editForm.full_name;
+    if (profile?.full_name) return profile.full_name;
+    if (user?.user_metadata?.full_name) return user.user_metadata.full_name;
+    if (user?.user_metadata?.name) return user.user_metadata.name;
+    if (user?.email) return user.email.split('@')[0];
+    return "User";
+  };
+
+  // Get display program
+  const getDisplayProgram = () => {
+    if (editForm.program) return editForm.program;
+    if (profile?.program) return profile.program;
+    if (user?.user_metadata?.program) return user.user_metadata.program;
+    return "Student";
+  };
+
+  // Get display student ID
+  const getDisplayStudentId = () => {
+    if (editForm.student_id) return editForm.student_id;
+    if (profile?.student_id) return profile.student_id;
+    if (user?.user_metadata?.student_id) return user.user_metadata.student_id;
+    return "N/A";
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-green-900 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -370,16 +427,17 @@ const Profile = () => {
               {!isEditing ? (
                 <>
                   <h1 className="text-2xl md:text-4xl font-bold mb-2">
-                    {editForm.name || "User"}
+                    {getDisplayName()}
                   </h1>
-                  <p className="text-green-200 text-lg mb-4">{editForm.program || "Student"}</p>
+                  <p className="text-green-200 text-lg mb-4">{getDisplayProgram()}</p>
+                  <p className="text-green-100 text-sm">{user?.email}</p>
                 </>
               ) : (
                 <>
                   <input
                     type="text"
-                    name="name"
-                    value={editForm.name}
+                    name="full_name"
+                    value={editForm.full_name}
                     onChange={handleInputChange}
                     className="text-2xl md:text-4xl font-bold mb-2 bg-white/20 rounded-lg px-3 py-1 text-white placeholder-white/50 w-full max-w-md"
                     placeholder="Full Name"
@@ -392,16 +450,17 @@ const Profile = () => {
                     className="text-lg mb-4 bg-white/20 rounded-lg px-3 py-1 text-white placeholder-white/50 w-full max-w-md"
                     placeholder="Program of Study"
                   />
+                  <p className="text-green-100 text-sm">{user?.email}</p>
                 </>
               )}
-              <div className="flex flex-wrap gap-4 justify-center md:justify-start">
+              <div className="flex flex-wrap gap-4 justify-center md:justify-start mt-3">
                 <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full">
                   <FaUniversity className="w-4 h-4" />
                   <span className="text-sm">Regent University</span>
                 </div>
                 <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full">
                   <FaIdCard className="w-4 h-4" />
-                  <span className="text-sm">{editForm.student_id || "N/A"}</span>
+                  <span className="text-sm">{getDisplayStudentId()}</span>
                 </div>
               </div>
             </div>
@@ -483,12 +542,12 @@ const Profile = () => {
                 <div className="flex-1">
                   <p className="text-sm text-gray-500 font-medium">Full Name</p>
                   {!isEditing ? (
-                    <p className="text-gray-900 font-semibold">{editForm.name || "N/A"}</p>
+                    <p className="text-gray-900 font-semibold">{getDisplayName()}</p>
                   ) : (
                     <input
                       type="text"
-                      name="name"
-                      value={editForm.name}
+                      name="full_name"
+                      value={editForm.full_name}
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-900 focus:border-transparent"
                       placeholder="Enter your full name"
@@ -511,7 +570,7 @@ const Profile = () => {
                 <div className="flex-1">
                   <p className="text-sm text-gray-500 font-medium">Student ID</p>
                   {!isEditing ? (
-                    <p className="text-gray-900 font-semibold">{editForm.student_id || "N/A"}</p>
+                    <p className="text-gray-900 font-semibold">{getDisplayStudentId()}</p>
                   ) : (
                     <input
                       type="text"
@@ -623,7 +682,7 @@ const Profile = () => {
                 <div className="flex-1">
                   <p className="text-sm text-gray-500 font-medium">Program</p>
                   {!isEditing ? (
-                    <p className="text-gray-900 font-semibold">{editForm.program || "N/A"}</p>
+                    <p className="text-gray-900 font-semibold">{getDisplayProgram()}</p>
                   ) : (
                     <input
                       type="text"
@@ -675,8 +734,6 @@ const Profile = () => {
                 </div>
               </div>
 
-              
-
               <div className="flex items-start space-x-4 p-4 bg-blue-50 rounded-2xl border border-blue-200">
                 <FaCode className="w-5 h-5 text-blue-900 flex-shrink-0 mt-1" />
                 <div className="flex-1">
@@ -716,8 +773,6 @@ const Profile = () => {
               </div>
             </div>
           </div>
-
-          
         </div>
 
         {/* Profile Completeness Section */}

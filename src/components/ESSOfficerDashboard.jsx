@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { 
@@ -53,7 +53,6 @@ const ESSOfficerDashboard = () => {
   
   // Jobs state
   const [jobs, setJobs] = useState([]);
-  const [filteredJobs, setFilteredJobs] = useState([]);
   const [jobSearchTerm, setJobSearchTerm] = useState('');
   const [showCreateJobModal, setShowCreateJobModal] = useState(false);
   const [showEditJobModal, setShowEditJobModal] = useState(false);
@@ -62,7 +61,6 @@ const ESSOfficerDashboard = () => {
   
   // Applications state
   const [applications, setApplications] = useState([]);
-  const [filteredApplications, setFilteredApplications] = useState([]);
   const [applicationSearchTerm, setApplicationSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedApplication, setSelectedApplication] = useState(null);
@@ -71,7 +69,6 @@ const ESSOfficerDashboard = () => {
   
   // Messages state
   const [messages, setMessages] = useState([]);
-  const [filteredMessages, setFilteredMessages] = useState([]);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
@@ -117,6 +114,7 @@ const ESSOfficerDashboard = () => {
   
   // Edit Job Form State
   const [editJob, setEditJob] = useState({
+    id: '',
     title: '',
     company: '',
     company_logo: '',
@@ -134,21 +132,91 @@ const ESSOfficerDashboard = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadType, setUploadType] = useState('');
 
+  // Memoized filtered data to prevent unnecessary re-renders
+  const filteredJobs = useMemo(() => {
+    if (!jobSearchTerm.trim()) return jobs;
+    
+    return jobs.filter(job =>
+      job.title?.toLowerCase().includes(jobSearchTerm.toLowerCase()) ||
+      job.company?.toLowerCase().includes(jobSearchTerm.toLowerCase()) ||
+      job.category?.toLowerCase().includes(jobSearchTerm.toLowerCase())
+    );
+  }, [jobs, jobSearchTerm]);
+
+  const filteredApplications = useMemo(() => {
+    let filtered = [...applications];
+    
+    if (applicationSearchTerm) {
+      filtered = filtered.filter(app =>
+        app.jobs?.title?.toLowerCase().includes(applicationSearchTerm.toLowerCase()) ||
+        app.jobs?.company?.toLowerCase().includes(applicationSearchTerm.toLowerCase()) ||
+        (app.full_name && app.full_name.toLowerCase().includes(applicationSearchTerm.toLowerCase())) ||
+        (app.email && app.email.toLowerCase().includes(applicationSearchTerm.toLowerCase()))
+      );
+    }
+    
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(app => app.status === statusFilter);
+    }
+    
+    return filtered;
+  }, [applications, applicationSearchTerm, statusFilter]);
+
+  const filteredMessages = useMemo(() => {
+    let filtered = [...messages];
+    
+    if (messageSearchTerm) {
+      filtered = filtered.filter(msg =>
+        msg.sender_name?.toLowerCase().includes(messageSearchTerm.toLowerCase()) ||
+        msg.message?.toLowerCase().includes(messageSearchTerm.toLowerCase()) ||
+        (msg.email && msg.email.toLowerCase().includes(messageSearchTerm.toLowerCase()))
+      );
+    }
+    
+    switch (messageFilter) {
+      case 'unread':
+        filtered = filtered.filter(msg => !msg.is_read && msg.receiver_id === adminUserId);
+        break;
+      case 'read':
+        filtered = filtered.filter(msg => msg.is_read);
+        break;
+      case 'from_applicants':
+        filtered = filtered.filter(msg => msg.sender_id !== adminUserId);
+        break;
+      case 'from_admin':
+        filtered = filtered.filter(msg => msg.sender_id === adminUserId);
+        break;
+      default:
+        break;
+    }
+    
+    return filtered;
+  }, [messages, messageSearchTerm, messageFilter, adminUserId]);
+
+  // Separate effect for stats updates
+  useEffect(() => {
+    const pending = applications.filter(app => app.status === 'pending').length || 0;
+    const reviewed = applications.filter(app => app.status === 'reviewed').length || 0;
+    const shortlisted = applications.filter(app => app.status === 'shortlisted').length || 0;
+    const hired = applications.filter(app => app.status === 'accepted').length || 0;
+    const unreadCount = messages.filter(msg => !msg.is_read && msg.receiver_id === adminUserId).length;
+    
+    setStats({
+      totalJobs: jobs.length,
+      activeJobs: jobs.filter(job => job.is_active).length,
+      totalApplications: applications.length,
+      pendingApplications: pending,
+      reviewedApplications: reviewed,
+      shortlistedApplications: shortlisted,
+      hiredApplications: hired,
+      totalMessages: messages.length,
+      unreadMessages: unreadCount
+    });
+  }, [jobs, applications, messages, adminUserId]);
+
   useEffect(() => {
     checkUserAndFetchData();
   }, []);
-
-  useEffect(() => {
-    filterJobs();
-  }, [jobSearchTerm, jobs]);
-
-  useEffect(() => {
-    filterApplications();
-  }, [applicationSearchTerm, statusFilter, applications]);
-
-  useEffect(() => {
-    filterMessages();
-  }, [messageSearchTerm, messageFilter, messages]);
 
   useEffect(() => {
     if (selectedMessage && messagesEndRef.current) {
@@ -197,7 +265,7 @@ const ESSOfficerDashboard = () => {
     }
   };
 
-  const fetchJobs = async () => {
+  const fetchJobs = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('jobs')
@@ -207,20 +275,13 @@ const ESSOfficerDashboard = () => {
       if (error) throw error;
       
       setJobs(data || []);
-      setFilteredJobs(data || []);
-      
-      setStats(prev => ({
-        ...prev,
-        totalJobs: data?.length || 0,
-        activeJobs: data?.filter(job => job.is_active).length || 0
-      }));
     } catch (error) {
       console.error('Error fetching jobs:', error);
       alert('Error fetching jobs: ' + error.message);
     }
-  };
+  }, []);
 
-  const fetchApplications = async () => {
+  const fetchApplications = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('applications')
@@ -234,28 +295,13 @@ const ESSOfficerDashboard = () => {
       if (error) throw error;
       
       setApplications(data || []);
-      setFilteredApplications(data || []);
-      
-      const pending = data?.filter(app => app.status === 'pending').length || 0;
-      const reviewed = data?.filter(app => app.status === 'reviewed').length || 0;
-      const shortlisted = data?.filter(app => app.status === 'shortlisted').length || 0;
-      const hired = data?.filter(app => app.status === 'accepted').length || 0;
-      
-      setStats(prev => ({
-        ...prev,
-        totalApplications: data?.length || 0,
-        pendingApplications: pending,
-        reviewedApplications: reviewed,
-        shortlistedApplications: shortlisted,
-        hiredApplications: hired
-      }));
     } catch (error) {
       console.error('Error fetching applications:', error);
       alert('Error fetching applications: ' + error.message);
     }
-  };
+  }, []);
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('application_messages')
@@ -276,19 +322,10 @@ const ESSOfficerDashboard = () => {
       }));
       
       setMessages(enhancedMessages);
-      setFilteredMessages(enhancedMessages);
-      
-      const unreadCount = enhancedMessages.filter(msg => !msg.is_read && msg.receiver_id === adminUserId).length;
-      
-      setStats(prev => ({
-        ...prev,
-        totalMessages: enhancedMessages.length,
-        unreadMessages: unreadCount
-      }));
     } catch (error) {
       console.error('Error fetching messages:', error);
     }
-  };
+  }, [adminUserId]);
 
   const fetchSenderProfiles = async () => {
     try {
@@ -305,153 +342,6 @@ const ESSOfficerDashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching sender profiles:', error);
-    }
-  };
-
-  const filterJobs = () => {
-    if (!jobSearchTerm.trim()) {
-      setFilteredJobs(jobs);
-      return;
-    }
-    
-    const filtered = jobs.filter(job =>
-      job.title?.toLowerCase().includes(jobSearchTerm.toLowerCase()) ||
-      job.company?.toLowerCase().includes(jobSearchTerm.toLowerCase()) ||
-      job.category?.toLowerCase().includes(jobSearchTerm.toLowerCase())
-    );
-    
-    setFilteredJobs(filtered);
-  };
-
-  const filterApplications = () => {
-    let filtered = [...applications];
-    
-    if (applicationSearchTerm) {
-      filtered = filtered.filter(app =>
-        app.jobs?.title?.toLowerCase().includes(applicationSearchTerm.toLowerCase()) ||
-        app.jobs?.company?.toLowerCase().includes(applicationSearchTerm.toLowerCase()) ||
-        app.full_name?.toLowerCase().includes(applicationSearchTerm.toLowerCase()) ||
-        app.email?.toLowerCase().includes(applicationSearchTerm.toLowerCase())
-      );
-    }
-    
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(app => app.status === statusFilter);
-    }
-    
-    setFilteredApplications(filtered);
-  };
-
-  const filterMessages = () => {
-    let filtered = [...messages];
-    
-    if (messageSearchTerm) {
-      filtered = filtered.filter(msg =>
-        msg.sender_name?.toLowerCase().includes(messageSearchTerm.toLowerCase()) ||
-        msg.message?.toLowerCase().includes(messageSearchTerm.toLowerCase()) ||
-        msg.email?.toLowerCase().includes(messageSearchTerm.toLowerCase())
-      );
-    }
-    
-    switch (messageFilter) {
-      case 'unread':
-        filtered = filtered.filter(msg => !msg.is_read && msg.receiver_id === adminUserId);
-        break;
-      case 'read':
-        filtered = filtered.filter(msg => msg.is_read);
-        break;
-      case 'from_applicants':
-        filtered = filtered.filter(msg => msg.sender_id !== adminUserId);
-        break;
-      case 'from_admin':
-        filtered = filtered.filter(msg => msg.sender_id === adminUserId);
-        break;
-      default:
-        break;
-    }
-    
-    setFilteredMessages(filtered);
-  };
-
-  const handleCreateJob = async (e) => {
-    e.preventDefault();
-    
-    try {
-      const { error } = await supabase
-        .from('jobs')
-        .insert([{
-          ...newJob,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }]);
-      
-      if (error) throw error;
-      
-      setShowCreateJobModal(false);
-      setNewJob({
-        title: '',
-        company: '',
-        company_logo: '',
-        job_image: '',
-        location: '',
-        job_type: 'internship',
-        category: 'Technology',
-        description: '',
-        requirements: '',
-        salary_range: '',
-        deadline: '',
-        is_active: true
-      });
-      
-      await fetchJobs();
-      alert('Job created successfully!');
-    } catch (error) {
-      console.error('Error creating job:', error);
-      alert('Error creating job: ' + error.message);
-    }
-  };
-
-  const handleUpdateJob = async (e) => {
-    e.preventDefault();
-    
-    try {
-      const { error } = await supabase
-        .from('jobs')
-        .update({
-          ...editJob,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', editJob.id);
-      
-      if (error) throw error;
-      
-      setShowEditJobModal(false);
-      await fetchJobs();
-      alert('Job updated successfully!');
-    } catch (error) {
-      console.error('Error updating job:', error);
-      alert('Error updating job: ' + error.message);
-    }
-  };
-
-  const handleDeleteJob = async () => {
-    if (!jobToDelete) return;
-    
-    try {
-      const { error } = await supabase
-        .from('jobs')
-        .delete()
-        .eq('id', jobToDelete.id);
-      
-      if (error) throw error;
-      
-      setShowDeleteModal(false);
-      setJobToDelete(null);
-      await fetchJobs();
-      alert('Job deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting job:', error);
-      alert('Error deleting job: ' + error.message);
     }
   };
 
@@ -598,7 +488,7 @@ const ESSOfficerDashboard = () => {
     }
   };
 
-  const getConversationHistory = (message) => {
+  const getConversationHistory = useCallback((message) => {
     if (!message) return [];
     
     return messages.filter(msg => 
@@ -607,44 +497,7 @@ const ESSOfficerDashboard = () => {
       msg.application_id === message.application_id ||
       msg.email === message.email
     ).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-  };
-
-  const handleImageUpload = async (file, type, isEdit = false) => {
-    if (!file) return;
-    
-    try {
-      setUploading(true);
-      setUploadType(type);
-      
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `job-portal-images/${fileName}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('job-portal-images')
-        .upload(filePath, file);
-      
-      if (uploadError) throw uploadError;
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from('job-portal-images')
-        .getPublicUrl(filePath);
-      
-      if (isEdit) {
-        setEditJob(prev => ({ ...prev, [type]: publicUrl }));
-      } else {
-        setNewJob(prev => ({ ...prev, [type]: publicUrl }));
-      }
-      
-      alert('Image uploaded successfully!');
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      alert('Error uploading image: ' + error.message);
-    } finally {
-      setUploading(false);
-      setUploadType('');
-    }
-  };
+  }, [messages]);
 
   const handleDownloadFile = async (url, fileName) => {
     if (!url) {
@@ -714,6 +567,303 @@ const ESSOfficerDashboard = () => {
     }
   };
 
+  // Create Job Modal component
+  const CreateJobModal = () => {
+    const [localNewJob, setLocalNewJob] = useState(newJob);
+    const [localUploading, setLocalUploading] = useState(false);
+    const [localUploadType, setLocalUploadType] = useState('');
+
+    const handleLocalImageUpload = async (file, type) => {
+      if (!file) return;
+      
+      try {
+        setLocalUploading(true);
+        setLocalUploadType(type);
+        
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `job-portal-images/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('job-portal-images')
+          .upload(filePath, file);
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('job-portal-images')
+          .getPublicUrl(filePath);
+        
+        setLocalNewJob(prev => ({ ...prev, [type]: publicUrl }));
+        alert('Image uploaded successfully!');
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        alert('Error uploading image: ' + error.message);
+      } finally {
+        setLocalUploading(false);
+        setLocalUploadType('');
+      }
+    };
+
+    const handleLocalSubmit = async (e) => {
+      e.preventDefault();
+      
+      try {
+        const { error } = await supabase
+          .from('jobs')
+          .insert([{
+            ...localNewJob,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }]);
+        
+        if (error) throw error;
+        
+        setShowCreateJobModal(false);
+        setNewJob(localNewJob);
+        await fetchJobs();
+        alert('Job created successfully!');
+      } catch (error) {
+        console.error('Error creating job:', error);
+        alert('Error creating job: ' + error.message);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Create New Job</h3>
+              <button onClick={() => setShowCreateJobModal(false)} className="text-gray-400 hover:text-gray-600">
+                <FaTimes className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleLocalSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Title *</label>
+                  <input
+                    type="text"
+                    value={localNewJob.title}
+                    onChange={(e) => setLocalNewJob({...localNewJob, title: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
+                  <input
+                    type="text"
+                    value={localNewJob.company}
+                    onChange={(e) => setLocalNewJob({...localNewJob, company: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                  <input
+                    type="text"
+                    value={localNewJob.location}
+                    onChange={(e) => setLocalNewJob({...localNewJob, location: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Type</label>
+                  <select
+                    value={localNewJob.job_type}
+                    onChange={(e) => setLocalNewJob({...localNewJob, job_type: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="internship">Internship</option>
+                    <option value="full-time">Full Time</option>
+                    <option value="part-time">Part Time</option>
+                    <option value="contract">Contract</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Salary Range</label>
+                <input
+                  type="text"
+                  value={localNewJob.salary_range}
+                  onChange={(e) => setLocalNewJob({...localNewJob, salary_range: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="e.g., $50,000 - $70,000"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={localNewJob.description}
+                  onChange={(e) => setLocalNewJob({...localNewJob, description: e.target.value})}
+                  rows="4"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Requirements</label>
+                <textarea
+                  value={localNewJob.requirements}
+                  onChange={(e) => setLocalNewJob({...localNewJob, requirements: e.target.value})}
+                  rows="3"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Deadline</label>
+                  <input
+                    type="date"
+                    value={localNewJob.deadline}
+                    onChange={(e) => setLocalNewJob({...localNewJob, deadline: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <select
+                    value={localNewJob.category}
+                    onChange={(e) => setLocalNewJob({...localNewJob, category: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="Technology">Technology</option>
+                    <option value="Business">Business</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Design">Design</option>
+                    <option value="Engineering">Engineering</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Company Logo</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleLocalImageUpload(e.target.files[0], 'company_logo')}
+                    className="w-full"
+                  />
+                  {localUploading && localUploadType === 'company_logo' && <p className="text-sm text-gray-500 mt-1">Uploading...</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Image</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleLocalImageUpload(e.target.files[0], 'job_image')}
+                    className="w-full"
+                  />
+                  {localUploading && localUploadType === 'job_image' && <p className="text-sm text-gray-500 mt-1">Uploading...</p>}
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <button type="button" onClick={() => setShowCreateJobModal(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
+                  Cancel
+                </button>
+                <button type="submit" className="px-6 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800">
+                  Create Job
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Edit Job Modal component
+  const EditJobModal = () => {
+    const [localEditJob, setLocalEditJob] = useState(editJob);
+
+    useEffect(() => {
+      setLocalEditJob(editJob);
+    }, [editJob]);
+
+    const handleLocalSubmit = async (e) => {
+      e.preventDefault();
+      
+      try {
+        const { error } = await supabase
+          .from('jobs')
+          .update({
+            ...localEditJob,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', localEditJob.id);
+        
+        if (error) throw error;
+        
+        setShowEditJobModal(false);
+        await fetchJobs();
+        alert('Job updated successfully!');
+      } catch (error) {
+        console.error('Error updating job:', error);
+        alert('Error updating job: ' + error.message);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Edit Job</h3>
+              <button onClick={() => setShowEditJobModal(false)} className="text-gray-400 hover:text-gray-600">
+                <FaTimes className="w-6 h-6" />
+              </button>
+            </div>
+            <form onSubmit={handleLocalSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Title *</label>
+                  <input
+                    type="text"
+                    value={localEditJob.title}
+                    onChange={(e) => setLocalEditJob({...localEditJob, title: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
+                  <input
+                    type="text"
+                    value={localEditJob.company}
+                    onChange={(e) => setLocalEditJob({...localEditJob, company: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 pt-4">
+                <button type="button" onClick={() => setShowEditJobModal(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
+                  Cancel
+                </button>
+                <button type="submit" className="px-6 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800">
+                  Update Job
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Stats Cards component
   const StatsCards = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
@@ -770,7 +920,7 @@ const ESSOfficerDashboard = () => {
     </div>
   );
 
-  // Conversation List Component
+  // Conversation List component
   const ConversationList = () => (
     <div className={`${showMobileConversation ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-1/3 border-r border-gray-200 bg-white`}>
       <div className="p-4 border-b border-gray-200">
@@ -864,7 +1014,7 @@ const ESSOfficerDashboard = () => {
     </div>
   );
 
-  // Conversation Detail Component
+  // Conversation Detail component
   const ConversationDetail = () => {
     const conversationHistory = getConversationHistory(selectedMessage);
     
@@ -1012,6 +1162,7 @@ const ESSOfficerDashboard = () => {
     );
   };
 
+  // Messages Tab component
   const MessagesTab = () => (
     <div className="h-[calc(100vh-350px)] min-h-[500px] bg-white rounded-xl shadow-lg overflow-hidden">
       <div className="flex h-full">
@@ -1021,6 +1172,7 @@ const ESSOfficerDashboard = () => {
     </div>
   );
 
+  // Jobs Tab component
   const JobsTab = () => (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1128,6 +1280,7 @@ const ESSOfficerDashboard = () => {
     </div>
   );
 
+  // Applications Tab component
   const ApplicationsTab = () => (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1310,161 +1463,7 @@ const ESSOfficerDashboard = () => {
     </div>
   );
 
-  // Modals
-  const CreateJobModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-2xl font-bold text-gray-900">Create New Job</h3>
-            <button onClick={() => setShowCreateJobModal(false)} className="text-gray-400 hover:text-gray-600">
-              <FaTimes className="w-6 h-6" />
-            </button>
-          </div>
-          
-          <form onSubmit={handleCreateJob} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Job Title *</label>
-                <input
-                  type="text"
-                  value={newJob.title}
-                  onChange={(e) => setNewJob({...newJob, title: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
-                <input
-                  type="text"
-                  value={newJob.company}
-                  onChange={(e) => setNewJob({...newJob, company: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                <input
-                  type="text"
-                  value={newJob.location}
-                  onChange={(e) => setNewJob({...newJob, location: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Job Type</label>
-                <select
-                  value={newJob.job_type}
-                  onChange={(e) => setNewJob({...newJob, job_type: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="internship">Internship</option>
-                  <option value="full-time">Full Time</option>
-                  <option value="part-time">Part Time</option>
-                  <option value="contract">Contract</option>
-                </select>
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Salary Range</label>
-              <input
-                type="text"
-                value={newJob.salary_range}
-                onChange={(e) => setNewJob({...newJob, salary_range: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="e.g., $50,000 - $70,000"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-              <textarea
-                value={newJob.description}
-                onChange={(e) => setNewJob({...newJob, description: e.target.value})}
-                rows="4"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Requirements</label>
-              <textarea
-                value={newJob.requirements}
-                onChange={(e) => setNewJob({...newJob, requirements: e.target.value})}
-                rows="3"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Deadline</label>
-                <input
-                  type="date"
-                  value={newJob.deadline}
-                  onChange={(e) => setNewJob({...newJob, deadline: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                <select
-                  value={newJob.category}
-                  onChange={(e) => setNewJob({...newJob, category: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="Technology">Technology</option>
-                  <option value="Business">Business</option>
-                  <option value="Marketing">Marketing</option>
-                  <option value="Design">Design</option>
-                  <option value="Engineering">Engineering</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company Logo</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleImageUpload(e.target.files[0], 'company_logo', false)}
-                  className="w-full"
-                />
-                {uploading && uploadType === 'company_logo' && <p className="text-sm text-gray-500 mt-1">Uploading...</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Job Image</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleImageUpload(e.target.files[0], 'job_image', false)}
-                  className="w-full"
-                />
-                {uploading && uploadType === 'job_image' && <p className="text-sm text-gray-500 mt-1">Uploading...</p>}
-              </div>
-            </div>
-            
-            <div className="flex justify-end space-x-3 pt-4">
-              <button type="button" onClick={() => setShowCreateJobModal(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
-                Cancel
-              </button>
-              <button type="submit" className="px-6 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800">
-                Create Job
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-
+  // Application Details Modal component
   const ApplicationDetailsModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -1633,6 +1632,7 @@ const ESSOfficerDashboard = () => {
     </div>
   );
 
+  // Delete Confirm Modal component
   const DeleteConfirmModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
@@ -1742,52 +1742,7 @@ const ESSOfficerDashboard = () => {
       
       {/* Modals */}
       {showCreateJobModal && <CreateJobModal />}
-      {showEditJobModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-gray-900">Edit Job</h3>
-                <button onClick={() => setShowEditJobModal(false)} className="text-gray-400 hover:text-gray-600">
-                  <FaTimes className="w-6 h-6" />
-                </button>
-              </div>
-              <form onSubmit={handleUpdateJob} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Job Title *</label>
-                    <input
-                      type="text"
-                      value={editJob.title}
-                      onChange={(e) => setEditJob({...editJob, title: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
-                    <input
-                      type="text"
-                      value={editJob.company}
-                      onChange={(e) => setEditJob({...editJob, company: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button type="button" onClick={() => setShowEditJobModal(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
-                    Cancel
-                  </button>
-                  <button type="submit" className="px-6 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800">
-                    Update Job
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+      {showEditJobModal && <EditJobModal />}
       {showDeleteModal && <DeleteConfirmModal />}
       {showApplicationDetails && <ApplicationDetailsModal />}
     </div>

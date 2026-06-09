@@ -53,10 +53,12 @@ const Signup = () => {
     confirmPassword: "",
     studentId: "",
     phone: "",
-    companyName: ""
+    companyName: "",
+    program: "",
+    graduationYear: ""
   });
 
-  // Validate name (no numbers allowed)
+  // Validate name (allow letters, spaces, hyphens, apostrophes - no numbers)
   const validateNameField = (value, fieldName) => {
     if (!value.trim()) {
       return `${fieldName} is required`;
@@ -64,8 +66,14 @@ const Signup = () => {
     if (/\d/.test(value)) {
       return `${fieldName} should not contain numbers`;
     }
+    if (!/^[a-zA-Z\s\-']+$/.test(value)) {
+      return `${fieldName} should only contain letters, spaces, hyphens, and apostrophes`;
+    }
     if (value.length < 2) {
       return `${fieldName} must be at least 2 characters`;
+    }
+    if (value.length > 50) {
+      return `${fieldName} must be less than 50 characters`;
     }
     return "";
   };
@@ -77,8 +85,14 @@ const Signup = () => {
     if (!emailRegex.test(value)) {
       return "Please enter a valid email address";
     }
+    if (value.length > 100) {
+      return "Email must be less than 100 characters";
+    }
     if (role === "student" && !value.endsWith("@regent.edu.gh")) {
       return "Students must use @regent.edu.gh email address";
+    }
+    if (role === "company" && value.endsWith("@regent.edu.gh")) {
+      return "Company representatives cannot use @regent.edu.gh email";
     }
     return "";
   };
@@ -88,6 +102,9 @@ const Signup = () => {
     if (!value) return "Password is required";
     if (value.length < 8) {
       return "Password must be at least 8 characters long";
+    }
+    if (value.length > 128) {
+      return "Password must be less than 128 characters";
     }
     if (!/[A-Z]/.test(value)) {
       return "Password must contain at least one uppercase letter";
@@ -101,6 +118,9 @@ const Signup = () => {
     if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) {
       return "Password must contain at least one special character (!@#$%^&* etc.)";
     }
+    if (/\s/.test(value)) {
+      return "Password should not contain spaces";
+    }
     return "";
   };
 
@@ -113,29 +133,68 @@ const Signup = () => {
     return "";
   };
 
-  // Validate student ID
+  // Validate student ID (alphanumeric, specific format)
   const validateStudentId = (value) => {
     if (!value) return "Student ID is required";
-    if (value.length < 8) {
-      return "Student ID must be at least 8 characters";
+    if (!/^[A-Za-z0-9-]+$/.test(value)) {
+      return "Student ID should only contain letters, numbers, and hyphens";
+    }
+    if (value.length < 6) {
+      return "Student ID must be at least 6 characters";
+    }
+    if (value.length > 20) {
+      return "Student ID must be less than 20 characters";
     }
     return "";
   };
 
-  // Validate phone number
+  // Validate phone number (allows numbers, +, -, spaces, parentheses)
   const validatePhone = (value) => {
     if (!value) return "Phone number is required";
-    const phoneRegex = /^[0-9+\-\s()]{10,}$/;
-    if (!phoneRegex.test(value)) {
-      return "Please enter a valid phone number";
+    // Remove all non-digit characters for length check
+    const digitsOnly = value.replace(/\D/g, '');
+    if (digitsOnly.length < 10) {
+      return "Phone number must have at least 10 digits";
+    }
+    if (digitsOnly.length > 15) {
+      return "Phone number must have less than 15 digits";
+    }
+    if (!/^[\d\s\+\(\)\-]+$/.test(value)) {
+      return "Phone number contains invalid characters";
     }
     return "";
   };
 
-  // Validate company name
+  // Validate company name (allows letters, numbers, spaces, and common business symbols)
   const validateCompanyName = (value) => {
     if (!value.trim()) return "Company name is required";
+    if (!/^[a-zA-Z0-9\s\&\'\-\.\,]+$/.test(value)) {
+      return "Company name should only contain letters, numbers, spaces, and basic punctuation (&' -.,)";
+    }
     if (value.length < 2) return "Company name must be at least 2 characters";
+    if (value.length > 100) return "Company name must be less than 100 characters";
+    return "";
+  };
+
+  // Validate program selection
+  const validateProgram = (value) => {
+    if (role === "student" && !value) return "Please select your academic program";
+    return "";
+  };
+
+  // Validate graduation year
+  const validateGraduationYear = (value) => {
+    if (role === "student" && !value) return "Please select your graduation year";
+    if (value) {
+      const year = new Date(value).getFullYear();
+      const currentYear = new Date().getFullYear();
+      if (year < currentYear - 1) {
+        return "Graduation year cannot be in the distant past";
+      }
+      if (year > currentYear + 10) {
+        return "Graduation year seems too far in the future";
+      }
+    }
     return "";
   };
 
@@ -149,6 +208,11 @@ const Signup = () => {
   const handleMiddleNameChange = (e) => {
     const value = e.target.value;
     setMiddleName(value);
+    if (value && /\d/.test(value)) {
+      setValidationErrors(prev => ({ ...prev, middleName: "Middle name should not contain numbers" }));
+    } else {
+      setValidationErrors(prev => ({ ...prev, middleName: "" }));
+    }
   };
 
   const handleLastNameChange = (e) => {
@@ -202,12 +266,26 @@ const Signup = () => {
     setValidationErrors(prev => ({ ...prev, companyName: validateCompanyName(value) }));
   };
 
+  // Handle program change
+  const handleProgramChange = (e) => {
+    const value = e.target.value;
+    setProgram(value);
+    setValidationErrors(prev => ({ ...prev, program: validateProgram(value) }));
+  };
+
+  // Handle graduation year change
+  const handleGraduationYearChange = (e) => {
+    const value = e.target.value;
+    setGraduationYear(value);
+    setValidationErrors(prev => ({ ...prev, graduationYear: validateGraduationYear(value) }));
+  };
+
   // Get full name
   const getFullName = () => {
     let full = firstName;
     if (middleName) full += ` ${middleName}`;
     if (lastName) full += ` ${lastName}`;
-    return full;
+    return full.trim();
   };
 
   // Get password strength indicator
@@ -244,26 +322,27 @@ const Signup = () => {
 
     let studentIdError = "";
     let companyNameError = "";
+    let programError = "";
+    let graduationYearError = "";
 
     if (role === "student") {
       studentIdError = validateStudentId(studentId);
-      if (!program) {
-        setErrorMsg("Please select your academic program");
-        setLoading(false);
-        return;
-      }
-      if (!graduationYear) {
-        setErrorMsg("Please select your graduation year");
-        setLoading(false);
-        return;
-      }
+      programError = validateProgram(program);
+      graduationYearError = validateGraduationYear(graduationYear);
     }
 
     if (role === "company") {
       companyNameError = validateCompanyName(companyName);
     }
 
-    if (firstNameError || lastNameError || emailError || passwordError || confirmPasswordError || phoneError || studentIdError || companyNameError) {
+    if (!role) {
+      setErrorMsg("Please select your role");
+      return;
+    }
+
+    if (firstNameError || lastNameError || emailError || passwordError || 
+        confirmPasswordError || phoneError || studentIdError || 
+        companyNameError || programError || graduationYearError) {
       setValidationErrors({
         firstName: firstNameError,
         lastName: lastNameError,
@@ -272,14 +351,11 @@ const Signup = () => {
         confirmPassword: confirmPasswordError,
         phone: phoneError,
         studentId: studentIdError,
-        companyName: companyNameError
+        companyName: companyNameError,
+        program: programError,
+        graduationYear: graduationYearError
       });
       setErrorMsg("Please fix the validation errors before submitting");
-      return;
-    }
-
-    if (!role) {
-      setErrorMsg("Please select your role");
       return;
     }
 
@@ -355,6 +431,7 @@ const Signup = () => {
       setPhone("");
       setRole("");
       setCompanyName("");
+      setValidationErrors({});
 
       setTimeout(() => navigate("/"), 3000);
     } catch (error) {
@@ -383,7 +460,6 @@ const Signup = () => {
         return "Join as a student to access internship opportunities and career resources";
       case "company":
         return "Register your company to post internships and connect with talented students";
-      
       default:
         return "Select your role to get started";
     }
@@ -435,7 +511,6 @@ const Signup = () => {
                         <option value="">Select Your Role</option>
                         <option value="student">Student</option>
                         <option value="company">Company Representative</option>
-                        
                       </select>
                       <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         {getRoleIcon()}
@@ -552,7 +627,7 @@ const Signup = () => {
                       <div className="relative">
                         <input
                           type="text"
-                          placeholder="Enter your student ID"
+                          placeholder="Enter your student ID (e.g., 2023-1234)"
                           value={studentId}
                           onChange={handleStudentIdChange}
                           className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
@@ -569,6 +644,7 @@ const Signup = () => {
                           <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.studentId}
                         </p>
                       )}
+                      <p className="text-xs text-gray-500">Format: Letters, numbers, and hyphens only (e.g., 2023-1234)</p>
                     </div>
                   )}
 
@@ -598,6 +674,7 @@ const Signup = () => {
                           <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.companyName}
                         </p>
                       )}
+                      <p className="text-xs text-gray-500">Can include letters, numbers, spaces, and basic punctuation (&' -.,)</p>
                     </div>
                   )}
 
@@ -610,8 +687,10 @@ const Signup = () => {
                       <div className="relative">
                         <select
                           value={program}
-                          onChange={(e) => setProgram(e.target.value)}
-                          className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300 appearance-none"
+                          onChange={handleProgramChange}
+                          className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 appearance-none ${
+                            validationErrors.program ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                          }`}
                           required
                         >
                           <option value="">Select Your Program</option>
@@ -630,6 +709,11 @@ const Signup = () => {
                           <FaGraduationCap className="w-5 h-5 text-gray-400" />
                         </div>
                       </div>
+                      {validationErrors.program && (
+                        <p className="text-xs text-red-600 flex items-center mt-1">
+                          <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.program}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -643,14 +727,21 @@ const Signup = () => {
                         <input
                           type="date"
                           value={graduationYear}
-                          onChange={(e) => setGraduationYear(e.target.value)}
-                          className="w-full p-4 pl-12 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 focus:border-green-900 transition-all duration-300"
+                          onChange={handleGraduationYearChange}
+                          className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
+                            validationErrors.graduationYear ? 'border-red-500' : 'border-gray-200 focus:border-green-900'
+                          }`}
                           required
                         />
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                           <FaCalendarAlt className="w-5 h-5 text-gray-400" />
                         </div>
                       </div>
+                      {validationErrors.graduationYear && (
+                        <p className="text-xs text-red-600 flex items-center mt-1">
+                          <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.graduationYear}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -662,7 +753,7 @@ const Signup = () => {
                     <div className="relative">
                       <input
                         type="tel"
-                        placeholder="Enter your phone number (e.g., +233 XX XXX XXXX)"
+                        placeholder="Enter your phone number (e.g., +233 XX XXX XXXX or 024XXXXXXX)"
                         value={phone}
                         onChange={handlePhoneChange}
                         className={`w-full p-4 pl-12 bg-white border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-100 transition-all duration-300 ${
@@ -679,6 +770,7 @@ const Signup = () => {
                         <FaExclamationTriangle className="w-3 h-3 mr-1" /> {validationErrors.phone}
                       </p>
                     )}
+                    <p className="text-xs text-gray-500">Format: Numbers, +, -, spaces, and parentheses (10-15 digits)</p>
                   </div>
 
                   {/* Password Field */}
