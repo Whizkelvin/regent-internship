@@ -41,7 +41,8 @@ import {
   FaFileWord,
   FaFileSignature,
   FaAward,
-  FaExternalLinkAlt
+  FaExternalLinkAlt,
+  FaSave
 } from 'react-icons/fa';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -342,6 +343,27 @@ const ESSOfficerDashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching sender profiles:', error);
+    }
+  };
+
+  const handleDeleteJob = async () => {
+    if (!jobToDelete) return;
+    
+    try {
+      const { error } = await supabase
+        .from('jobs')
+        .delete()
+        .eq('id', jobToDelete.id);
+      
+      if (error) throw error;
+      
+      setShowDeleteModal(false);
+      setJobToDelete(null);
+      await fetchJobs();
+      alert('Job deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting job:', error);
+      alert('Error deleting job: ' + error.message);
     }
   };
 
@@ -672,6 +694,7 @@ const ESSOfficerDashboard = () => {
                     value={localNewJob.location}
                     onChange={(e) => setLocalNewJob({...localNewJob, location: e.target.value})}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="e.g., Accra, Ghana or Remote"
                   />
                 </div>
                 <div>
@@ -689,45 +712,15 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Salary Range</label>
-                <input
-                  type="text"
-                  value={localNewJob.salary_range}
-                  onChange={(e) => setLocalNewJob({...localNewJob, salary_range: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="e.g., $50,000 - $70,000"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                <textarea
-                  value={localNewJob.description}
-                  onChange={(e) => setLocalNewJob({...localNewJob, description: e.target.value})}
-                  rows="4"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Requirements</label>
-                <textarea
-                  value={localNewJob.requirements}
-                  onChange={(e) => setLocalNewJob({...localNewJob, requirements: e.target.value})}
-                  rows="3"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Deadline</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Salary Range</label>
                   <input
-                    type="date"
-                    value={localNewJob.deadline}
-                    onChange={(e) => setLocalNewJob({...localNewJob, deadline: e.target.value})}
+                    type="text"
+                    value={localNewJob.salary_range}
+                    onChange={(e) => setLocalNewJob({...localNewJob, salary_range: e.target.value})}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="e.g., $50,000 - $70,000"
                   />
                 </div>
                 <div>
@@ -741,9 +734,55 @@ const ESSOfficerDashboard = () => {
                     <option value="Business">Business</option>
                     <option value="Marketing">Marketing</option>
                     <option value="Design">Design</option>
+                    <option value="Sales">Sales</option>
                     <option value="Engineering">Engineering</option>
                   </select>
                 </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Application Deadline</label>
+                  <input
+                    type="date"
+                    value={localNewJob.deadline}
+                    onChange={(e) => setLocalNewJob({...localNewJob, deadline: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Status</label>
+                  <select
+                    value={localNewJob.is_active}
+                    onChange={(e) => setLocalNewJob({...localNewJob, is_active: e.target.value === 'true'})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Job Description</label>
+                <textarea
+                  value={localNewJob.description}
+                  onChange={(e) => setLocalNewJob({...localNewJob, description: e.target.value})}
+                  rows="4"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Describe the role, responsibilities, and what makes this opportunity great..."
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Requirements</label>
+                <textarea
+                  value={localNewJob.requirements}
+                  onChange={(e) => setLocalNewJob({...localNewJob, requirements: e.target.value})}
+                  rows="3"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="List the qualifications, skills, and experience required..."
+                />
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -784,13 +823,47 @@ const ESSOfficerDashboard = () => {
     );
   };
 
-  // Edit Job Modal component
+  // Edit Job Modal component - Complete with all fields
   const EditJobModal = () => {
     const [localEditJob, setLocalEditJob] = useState(editJob);
+    const [localUploading, setLocalUploading] = useState(false);
+    const [localUploadType, setLocalUploadType] = useState('');
 
     useEffect(() => {
       setLocalEditJob(editJob);
     }, [editJob]);
+
+    const handleLocalImageUpload = async (file, type) => {
+      if (!file) return;
+      
+      try {
+        setLocalUploading(true);
+        setLocalUploadType(type);
+        
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `job-portal-images/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('job-portal-images')
+          .upload(filePath, file);
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('job-portal-images')
+          .getPublicUrl(filePath);
+        
+        setLocalEditJob(prev => ({ ...prev, [type]: publicUrl }));
+        alert('Image uploaded successfully!');
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        alert('Error uploading image: ' + error.message);
+      } finally {
+        setLocalUploading(false);
+        setLocalUploadType('');
+      }
+    };
 
     const handleLocalSubmit = async (e) => {
       e.preventDefault();
@@ -799,7 +872,18 @@ const ESSOfficerDashboard = () => {
         const { error } = await supabase
           .from('jobs')
           .update({
-            ...localEditJob,
+            title: localEditJob.title,
+            company: localEditJob.company,
+            company_logo: localEditJob.company_logo,
+            job_image: localEditJob.job_image,
+            location: localEditJob.location,
+            job_type: localEditJob.job_type,
+            category: localEditJob.category,
+            description: localEditJob.description,
+            requirements: localEditJob.requirements,
+            salary_range: localEditJob.salary_range,
+            deadline: localEditJob.deadline,
+            is_active: localEditJob.is_active,
             updated_at: new Date().toISOString()
           })
           .eq('id', localEditJob.id);
@@ -825,7 +909,9 @@ const ESSOfficerDashboard = () => {
                 <FaTimes className="w-6 h-6" />
               </button>
             </div>
+            
             <form onSubmit={handleLocalSubmit} className="space-y-4">
+              {/* Job Title and Company */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Job Title *</label>
@@ -848,12 +934,174 @@ const ESSOfficerDashboard = () => {
                   />
                 </div>
               </div>
-              <div className="flex justify-end space-x-3 pt-4">
-                <button type="button" onClick={() => setShowEditJobModal(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
+              
+              {/* Location and Job Type */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                  <input
+                    type="text"
+                    value={localEditJob.location}
+                    onChange={(e) => setLocalEditJob({...localEditJob, location: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="e.g., Accra, Ghana or Remote"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Type</label>
+                  <select
+                    value={localEditJob.job_type}
+                    onChange={(e) => setLocalEditJob({...localEditJob, job_type: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="internship">Internship</option>
+                    <option value="full-time">Full Time</option>
+                    <option value="part-time">Part Time</option>
+                    <option value="contract">Contract</option>
+                  </select>
+                </div>
+              </div>
+              
+              {/* Salary Range and Category */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Salary Range</label>
+                  <input
+                    type="text"
+                    value={localEditJob.salary_range}
+                    onChange={(e) => setLocalEditJob({...localEditJob, salary_range: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="e.g., $50,000 - $70,000"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <select
+                    value={localEditJob.category}
+                    onChange={(e) => setLocalEditJob({...localEditJob, category: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="Technology">Technology</option>
+                    <option value="Business">Business</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Design">Design</option>
+                    <option value="Sales">Sales</option>
+                    <option value="Engineering">Engineering</option>
+                  </select>
+                </div>
+              </div>
+              
+              {/* Deadline and Active Status */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Application Deadline</label>
+                  <input
+                    type="date"
+                    value={localEditJob.deadline}
+                    onChange={(e) => setLocalEditJob({...localEditJob, deadline: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Status</label>
+                  <select
+                    value={localEditJob.is_active}
+                    onChange={(e) => setLocalEditJob({...localEditJob, is_active: e.target.value === 'true'})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              
+              {/* Job Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Job Description</label>
+                <textarea
+                  value={localEditJob.description}
+                  onChange={(e) => setLocalEditJob({...localEditJob, description: e.target.value})}
+                  rows="4"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Describe the role, responsibilities, and what makes this opportunity great..."
+                />
+              </div>
+              
+              {/* Requirements */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Requirements</label>
+                <textarea
+                  value={localEditJob.requirements}
+                  onChange={(e) => setLocalEditJob({...localEditJob, requirements: e.target.value})}
+                  rows="3"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="List the qualifications, skills, and experience required..."
+                />
+              </div>
+              
+              {/* Image Uploads */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Company Logo</label>
+                  {localEditJob.company_logo && (
+                    <div className="mb-2">
+                      <img 
+                        src={localEditJob.company_logo} 
+                        alt="Company Logo" 
+                        className="w-20 h-20 object-cover rounded-lg border border-gray-200"
+                      />
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleLocalImageUpload(e.target.files[0], 'company_logo')}
+                    className="w-full"
+                  />
+                  {localUploading && localUploadType === 'company_logo' && (
+                    <p className="text-sm text-gray-500 mt-1">Uploading...</p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">Leave empty to keep current logo</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Image</label>
+                  {localEditJob.job_image && (
+                    <div className="mb-2">
+                      <img 
+                        src={localEditJob.job_image} 
+                        alt="Job Image" 
+                        className="w-20 h-20 object-cover rounded-lg border border-gray-200"
+                      />
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleLocalImageUpload(e.target.files[0], 'job_image')}
+                    className="w-full"
+                  />
+                  {localUploading && localUploadType === 'job_image' && (
+                    <p className="text-sm text-gray-500 mt-1">Uploading...</p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">Leave empty to keep current image</p>
+                </div>
+              </div>
+              
+              {/* Form Actions */}
+              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button 
+                  type="button" 
+                  onClick={() => setShowEditJobModal(false)} 
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="px-6 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800">
-                  Update Job
+                <button 
+                  type="submit" 
+                  className="px-6 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800 transition-colors flex items-center space-x-2"
+                >
+                  <FaSave className="w-4 h-4" />
+                  <span>Update Job</span>
                 </button>
               </div>
             </form>
@@ -1088,7 +1336,7 @@ const ESSOfficerDashboard = () => {
             <div className="text-center py-8">
               <FaEnvelope className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500">No conversation history</p>
-            </div>
+                       </div>
           ) : (
             conversationHistory.map((msg) => {
               const isMyMessage = msg.sender_id === adminUserId;
@@ -1235,7 +1483,7 @@ const ESSOfficerDashboard = () => {
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center text-sm text-gray-600">
                     <FaMapMarkerAlt className="w-4 h-4 mr-2 text-gray-400" />
-                    {job.location}
+                    {job.location || 'Not specified'}
                   </div>
                   <div className="flex items-center text-sm text-gray-600">
                     <FaDollarSign className="w-4 h-4 mr-2 text-gray-400" />
@@ -1258,6 +1506,7 @@ const ESSOfficerDashboard = () => {
                         setShowEditJobModal(true);
                       }}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Edit Job"
                     >
                       <FaEdit className="w-4 h-4" />
                     </button>
@@ -1267,6 +1516,7 @@ const ESSOfficerDashboard = () => {
                         setShowDeleteModal(true);
                       }}
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete Job"
                     >
                       <FaTrash className="w-4 h-4" />
                     </button>
