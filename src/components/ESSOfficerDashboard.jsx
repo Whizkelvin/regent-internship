@@ -42,7 +42,14 @@ import {
   FaFileSignature,
   FaAward,
   FaExternalLinkAlt,
-  FaSave
+  FaSave,
+  FaUsers,
+  FaUserTag,
+  FaBan,
+  FaCheck,
+  FaSpinner,
+  FaUserGraduate,
+  FaBriefcase as FaCompany
 } from 'react-icons/fa';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -81,6 +88,22 @@ const ESSOfficerDashboard = () => {
   const [senderProfiles, setSenderProfiles] = useState({});
   const [adminUserId, setAdminUserId] = useState(null);
   
+  // Users state
+  const [users, setUsers] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [userStatusFilter, setUserStatusFilter] = useState('all');
+  const [updatingUser, setUpdatingUser] = useState(null);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUserData, setNewUserData] = useState({
+    email: '',
+    password: '',
+    full_name: '',
+    role: 'student',
+    phone: ''
+  });
+  
   const messagesEndRef = useRef(null);
   const replyInputRef = useRef(null);
   
@@ -94,7 +117,11 @@ const ESSOfficerDashboard = () => {
     shortlistedApplications: 0,
     hiredApplications: 0,
     totalMessages: 0,
-    unreadMessages: 0
+    unreadMessages: 0,
+    totalUsers: 0,
+    activeUsers: 0,
+    studentUsers: 0,
+    companyUsers: 0
   });
   
   // New Job Form State
@@ -133,7 +160,7 @@ const ESSOfficerDashboard = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadType, setUploadType] = useState('');
 
-  // Memoized filtered data to prevent unnecessary re-renders
+  // Memoized filtered data
   const filteredJobs = useMemo(() => {
     if (!jobSearchTerm.trim()) return jobs;
     
@@ -194,6 +221,28 @@ const ESSOfficerDashboard = () => {
     return filtered;
   }, [messages, messageSearchTerm, messageFilter, adminUserId]);
 
+  const filteredUsersData = useMemo(() => {
+    let filtered = [...users];
+    
+    if (userSearchTerm) {
+      filtered = filtered.filter(user =>
+        user.email?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+        user.full_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+        user.phone?.toLowerCase().includes(userSearchTerm.toLowerCase())
+      );
+    }
+    
+    if (userRoleFilter !== 'all') {
+      filtered = filtered.filter(user => user.role === userRoleFilter);
+    }
+    
+    if (userStatusFilter !== 'all') {
+      filtered = filtered.filter(user => user.status === userStatusFilter);
+    }
+    
+    return filtered;
+  }, [users, userSearchTerm, userRoleFilter, userStatusFilter]);
+
   // Separate effect for stats updates
   useEffect(() => {
     const pending = applications.filter(app => app.status === 'pending').length || 0;
@@ -201,6 +250,10 @@ const ESSOfficerDashboard = () => {
     const shortlisted = applications.filter(app => app.status === 'shortlisted').length || 0;
     const hired = applications.filter(app => app.status === 'accepted').length || 0;
     const unreadCount = messages.filter(msg => !msg.is_read && msg.receiver_id === adminUserId).length;
+    
+    const studentCount = users.filter(u => u.role === 'student').length;
+    const companyCount = users.filter(u => u.role === 'company').length;
+    const activeUserCount = users.filter(u => u.status === 'active').length;
     
     setStats({
       totalJobs: jobs.length,
@@ -211,9 +264,13 @@ const ESSOfficerDashboard = () => {
       shortlistedApplications: shortlisted,
       hiredApplications: hired,
       totalMessages: messages.length,
-      unreadMessages: unreadCount
+      unreadMessages: unreadCount,
+      totalUsers: users.length,
+      activeUsers: activeUserCount,
+      studentUsers: studentCount,
+      companyUsers: companyCount
     });
-  }, [jobs, applications, messages, adminUserId]);
+  }, [jobs, applications, messages, adminUserId, users]);
 
   useEffect(() => {
     checkUserAndFetchData();
@@ -258,6 +315,7 @@ const ESSOfficerDashboard = () => {
       await fetchApplications();
       await fetchMessages();
       await fetchSenderProfiles();
+      await fetchUsers();
     } catch (error) {
       console.error('Error checking user:', error);
       navigate('/login');
@@ -346,6 +404,40 @@ const ESSOfficerDashboard = () => {
     }
   };
 
+  const fetchUsers = useCallback(async () => {
+    try {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (profilesError) throw profilesError;
+      
+      const formattedUsers = (profiles || []).map(profile => ({
+        id: profile.id,
+        email: profile.email || 'No email',
+        full_name: profile.full_name || profile.email?.split('@')[0] || 'User',
+        role: profile.role || 'user',
+        status: profile.status || 'active',
+        phone: profile.phone || null,
+        created_at: profile.created_at,
+        updated_at: profile.updated_at,
+        avatar_url: profile.avatar_url,
+        banned: profile.banned || false,
+        company_name: profile.company_name || null,
+        student_id: profile.student_id || null,
+        program: profile.program || null
+      }));
+      
+      setUsers(formattedUsers);
+      setFilteredUsers(formattedUsers);
+      
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      alert('Failed to load users: ' + error.message);
+    }
+  }, []);
+
   const handleDeleteJob = async () => {
     if (!jobToDelete) return;
     
@@ -364,6 +456,126 @@ const ESSOfficerDashboard = () => {
     } catch (error) {
       console.error('Error deleting job:', error);
       alert('Error deleting job: ' + error.message);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+      
+      if (profileError) throw profileError;
+      
+      alert('User deleted successfully');
+      await fetchUsers();
+      
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Failed to delete user: ' + error.message);
+    }
+  };
+
+  const handleUpdateUserStatus = async (userId, currentStatus) => {
+    setUpdatingUser(userId);
+    const newStatus = currentStatus === 'active' ? 'banned' : 'active';
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          status: newStatus,
+          banned: newStatus === 'banned',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      alert(`User ${newStatus === 'active' ? 'activated' : 'banned'} successfully`);
+      await fetchUsers();
+      
+    } catch (error) {
+      console.error('Error updating user status:', error);
+      alert('Failed to update user status: ' + error.message);
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const handleUpdateUserRole = async (userId, newRole) => {
+    setUpdatingUser(userId);
+    
+    try {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ 
+          role: newRole,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+      
+      if (profileError) throw profileError;
+      
+      alert(`User role updated to ${newRole}`);
+      await fetchUsers();
+      
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      alert('Failed to update user role: ' + error.message);
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const handleAddUser = async (e) => {
+    e.preventDefault();
+    
+    if (!newUserData.email || !newUserData.password || !newUserData.full_name) {
+      alert('Please fill in all required fields');
+      return;
+    }
+    
+    try {
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: newUserData.email,
+        password: newUserData.password,
+        options: {
+          data: {
+            full_name: newUserData.full_name,
+            role: newUserData.role,
+            phone: newUserData.phone
+          }
+        }
+      });
+      
+      if (signUpError) throw signUpError;
+      
+      if (!authData.user) {
+        throw new Error('Failed to create user');
+      }
+      
+      alert(`User ${newUserData.email} added successfully with role: ${newUserData.role}`);
+      
+      setShowAddUserModal(false);
+      setNewUserData({
+        email: '',
+        password: '',
+        full_name: '',
+        role: 'student',
+        phone: ''
+      });
+      
+      await fetchUsers();
+      
+    } catch (error) {
+      console.error('Error adding user:', error);
+      alert('Failed to add user: ' + error.message);
     }
   };
 
@@ -573,6 +785,16 @@ const ESSOfficerDashboard = () => {
     return colors[jobType] || 'bg-gray-100 text-gray-800';
   };
 
+  const getRoleBadgeColor = (role) => {
+    const colors = {
+      admin: 'bg-red-100 text-red-800',
+      ess_officer: 'bg-purple-100 text-purple-800',
+      company: 'bg-blue-100 text-blue-800',
+      student: 'bg-green-100 text-green-800'
+    };
+    return colors[role] || 'bg-gray-100 text-gray-800';
+  };
+
   const formatMessageTime = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -588,6 +810,88 @@ const ESSOfficerDashboard = () => {
       return format(date, 'MMM d');
     }
   };
+
+  // Add User Modal
+  const AddUserModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-2xl font-bold text-gray-900">Add New User</h3>
+            <button onClick={() => setShowAddUserModal(false)} className="text-gray-400 hover:text-gray-600">
+              <FaTimes className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <form onSubmit={handleAddUser} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
+              <input
+                type="text"
+                value={newUserData.full_name}
+                onChange={(e) => setNewUserData({...newUserData, full_name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+              <input
+                type="email"
+                value={newUserData.email}
+                onChange={(e) => setNewUserData({...newUserData, email: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Password *</label>
+              <input
+                type="password"
+                value={newUserData.password}
+                onChange={(e) => setNewUserData({...newUserData, password: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+              <select
+                value={newUserData.role}
+                onChange={(e) => setNewUserData({...newUserData, role: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="student">Student</option>
+                <option value="company">Company Representative</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+              <input
+                type="tel"
+                value={newUserData.phone}
+                onChange={(e) => setNewUserData({...newUserData, phone: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <button type="button" onClick={() => setShowAddUserModal(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">
+                Cancel
+              </button>
+              <button type="submit" className="px-6 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800">
+                Add User
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
 
   // Create Job Modal component
   const CreateJobModal = () => {
@@ -823,7 +1127,7 @@ const ESSOfficerDashboard = () => {
     );
   };
 
-  // Edit Job Modal component - Complete with all fields
+  // Edit Job Modal component
   const EditJobModal = () => {
     const [localEditJob, setLocalEditJob] = useState(editJob);
     const [localUploading, setLocalUploading] = useState(false);
@@ -911,7 +1215,6 @@ const ESSOfficerDashboard = () => {
             </div>
             
             <form onSubmit={handleLocalSubmit} className="space-y-4">
-              {/* Job Title and Company */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Job Title *</label>
@@ -935,7 +1238,6 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
-              {/* Location and Job Type */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
@@ -962,7 +1264,6 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
-              {/* Salary Range and Category */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Salary Range</label>
@@ -991,7 +1292,6 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
-              {/* Deadline and Active Status */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Application Deadline</label>
@@ -1015,7 +1315,6 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
-              {/* Job Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Job Description</label>
                 <textarea
@@ -1027,7 +1326,6 @@ const ESSOfficerDashboard = () => {
                 />
               </div>
               
-              {/* Requirements */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Requirements</label>
                 <textarea
@@ -1039,7 +1337,6 @@ const ESSOfficerDashboard = () => {
                 />
               </div>
               
-              {/* Image Uploads */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Company Logo</label>
@@ -1087,7 +1384,6 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
-              {/* Form Actions */}
               <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button 
                   type="button" 
@@ -1114,62 +1410,219 @@ const ESSOfficerDashboard = () => {
   // Stats Cards component
   const StatsCards = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+      <div className="bg-gradient-to-br from-green-950 to-emerald-900 rounded-2xl shadow-lg p-6 border border-emerald-800">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-600 mb-1">Total Jobs</p>
-            <p className="text-3xl font-bold text-gray-900">{stats.totalJobs}</p>
-            <p className="text-xs text-green-600 mt-1">{stats.activeJobs} active</p>
+            <p className="text-sm text-emerald-200 mb-1">Total Jobs</p>
+            <p className="text-3xl font-bold text-white">{stats.totalJobs}</p>
+            <p className="text-xs text-emerald-300 mt-1">{stats.activeJobs} active</p>
           </div>
-          <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-            <FaBriefcase className="w-6 h-6 text-green-900" />
+          <div className="w-12 h-12 bg-emerald-800 rounded-xl flex items-center justify-center">
+            <FaBriefcase className="w-6 h-6 text-emerald-200" />
           </div>
         </div>
       </div>
       
-      <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+      <div className="bg-gradient-to-br from-green-950 to-emerald-900 rounded-2xl shadow-lg p-6 border border-emerald-800">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-600 mb-1">Total Applications</p>
-            <p className="text-3xl font-bold text-gray-900">{stats.totalApplications}</p>
-            <p className="text-xs text-yellow-600 mt-1">{stats.pendingApplications} pending</p>
+            <p className="text-sm text-emerald-200 mb-1">Total Applications</p>
+            <p className="text-3xl font-bold text-white">{stats.totalApplications}</p>
+            <p className="text-xs text-emerald-300 mt-1">{stats.pendingApplications} pending</p>
           </div>
-          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-            <FaClipboardCheck className="w-6 h-6 text-blue-900" />
+          <div className="w-12 h-12 bg-emerald-800 rounded-xl flex items-center justify-center">
+            <FaClipboardCheck className="w-6 h-6 text-emerald-200" />
           </div>
         </div>
       </div>
       
-      <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+      <div className="bg-gradient-to-br from-green-950 to-emerald-900 rounded-2xl shadow-lg p-6 border border-emerald-800">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-600 mb-1">Shortlisted</p>
-            <p className="text-3xl font-bold text-gray-900">{stats.shortlistedApplications}</p>
-            <p className="text-xs text-purple-600 mt-1">For interview</p>
+            <p className="text-sm text-emerald-200 mb-1">Total Users</p>
+            <p className="text-3xl font-bold text-white">{stats.totalUsers}</p>
+            <p className="text-xs text-emerald-300 mt-1">{stats.activeUsers} active</p>
           </div>
-          <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-            <FaUserCheck className="w-6 h-6 text-purple-900" />
+          <div className="w-12 h-12 bg-emerald-800 rounded-xl flex items-center justify-center">
+            <FaUsers className="w-6 h-6 text-emerald-200" />
           </div>
         </div>
       </div>
       
-      <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+      <div className="bg-gradient-to-br from-green-950 to-emerald-900 rounded-2xl shadow-lg p-6 border border-emerald-800">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-600 mb-1">Unread Messages</p>
-            <p className="text-3xl font-bold text-red-600">{stats.unreadMessages}</p>
-            <p className="text-xs text-gray-600 mt-1">Total: {stats.totalMessages}</p>
+            <p className="text-sm text-emerald-200 mb-1">Unread Messages</p>
+            <p className="text-3xl font-bold text-red-400">{stats.unreadMessages}</p>
+            <p className="text-xs text-emerald-300 mt-1">Total: {stats.totalMessages}</p>
           </div>
-          <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-            <FaInbox className="w-6 h-6 text-red-900" />
+          <div className="w-12 h-12 bg-emerald-800 rounded-xl flex items-center justify-center">
+            <FaInbox className="w-6 h-6 text-emerald-200" />
           </div>
         </div>
       </div>
     </div>
   );
 
-  // Conversation List component
+  // Users Tab component
+  const UsersTab = () => (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">User Management</h2>
+          <p className="text-gray-600">View and manage all registered users</p>
+        </div>
+        <div className="flex space-x-3">
+          <div className="relative">
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={userSearchTerm}
+              onChange={(e) => setUserSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </div>
+          <select
+            value={userRoleFilter}
+            onChange={(e) => setUserRoleFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          >
+            <option value="all">All Roles</option>
+            <option value="student">Students</option>
+            <option value="company">Companies</option>
+            <option value="ess_officer">ESS Officers</option>
+            <option value="admin">Admins</option>
+          </select>
+          <select
+            value={userStatusFilter}
+            onChange={(e) => setUserStatusFilter(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          >
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="banned">Banned</option>
+          </select>
+          <button
+            onClick={() => setShowAddUserModal(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-900 text-white rounded-lg hover:bg-green-800 transition-colors"
+          >
+            <FaPlus className="w-4 h-4" />
+            <span>Add User</span>
+          </button>
+          <button
+            onClick={fetchUsers}
+            className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <FaSync className="w-4 h-4" />
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+      
+      {filteredUsersData.length === 0 ? (
+        <div className="bg-white rounded-xl p-12 text-center">
+          <FaUsers className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Users Found</h3>
+          <p className="text-gray-600">No users match your search criteria</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredUsersData.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full flex items-center justify-center">
+                          {user.role === 'student' ? (
+                            <FaUserGraduate className="w-5 h-5 text-green-900" />
+                          ) : user.role === 'company' ? (
+                            <FaCompany className="w-5 h-5 text-blue-900" />
+                          ) : (
+                            <FaUser className="w-5 h-5 text-purple-900" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{user.full_name}</p>
+                          <p className="text-sm text-gray-500">{user.email}</p>
+                          {user.phone && <p className="text-xs text-gray-400">{user.phone}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <select
+                        value={user.role}
+                        onChange={(e) => handleUpdateUserRole(user.id, e.target.value)}
+                        disabled={updatingUser === user.id}
+                        className={`px-2 py-1 rounded-full text-xs font-medium border-0 focus:ring-2 focus:ring-green-500 ${getRoleBadgeColor(user.role)}`}
+                      >
+                        <option value="student">Student</option>
+                        <option value="company">Company</option>
+                        <option value="ess_officer">ESS Officer</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {user.status === 'active' ? 'Active' : 'Banned'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {new Date(user.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleUpdateUserStatus(user.id, user.status)}
+                          disabled={updatingUser === user.id}
+                          className={`p-2 rounded-lg transition-colors ${
+                            user.status === 'active' 
+                              ? 'text-red-600 hover:bg-red-50' 
+                              : 'text-green-600 hover:bg-green-50'
+                          }`}
+                          title={user.status === 'active' ? 'Ban User' : 'Activate User'}
+                        >
+                          {updatingUser === user.id ? (
+                            <FaSpinner className="w-4 h-4 animate-spin" />
+                          ) : user.status === 'active' ? (
+                            <FaBan className="w-4 h-4" />
+                          ) : (
+                            <FaCheck className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete User"
+                        >
+                          <FaTrash className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Conversation List component (keep as is from previous code)
   const ConversationList = () => (
+    // ... (keep existing ConversationList code)
     <div className={`${showMobileConversation ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-1/3 border-r border-gray-200 bg-white`}>
       <div className="p-4 border-b border-gray-200">
         <div className="relative mb-3">
@@ -1262,7 +1715,7 @@ const ESSOfficerDashboard = () => {
     </div>
   );
 
-  // Conversation Detail component
+  // Conversation Detail component (keep as is from previous code)
   const ConversationDetail = () => {
     const conversationHistory = getConversationHistory(selectedMessage);
     
@@ -1336,7 +1789,7 @@ const ESSOfficerDashboard = () => {
             <div className="text-center py-8">
               <FaEnvelope className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500">No conversation history</p>
-                       </div>
+            </div>
           ) : (
             conversationHistory.map((msg) => {
               const isMyMessage = msg.sender_id === adminUserId;
@@ -1648,7 +2101,6 @@ const ESSOfficerDashboard = () => {
               <div className="p-6 bg-gray-50">
                 <h4 className="font-semibold text-gray-900 mb-3 text-sm">Uploaded Documents</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {/* CV Section */}
                   <div className="bg-white rounded-lg p-3 border border-gray-200">
                     <div className="flex items-center space-x-2 mb-2">
                       <FaFileAlt className="w-4 h-4 text-green-600" />
@@ -1667,7 +2119,6 @@ const ESSOfficerDashboard = () => {
                     )}
                   </div>
                   
-                  {/* Recommendation Letter Section */}
                   <div className="bg-white rounded-lg p-3 border border-gray-200">
                     <div className="flex items-center space-x-2 mb-2">
                       <FaFileSignature className="w-4 h-4 text-blue-600" />
@@ -1686,7 +2137,6 @@ const ESSOfficerDashboard = () => {
                     )}
                   </div>
                   
-                  {/* Evaluation Form Section */}
                   <div className="bg-white rounded-lg p-3 border border-gray-200">
                     <div className="flex items-center space-x-2 mb-2">
                       <FaAward className="w-4 h-4 text-purple-600" />
@@ -1727,7 +2177,6 @@ const ESSOfficerDashboard = () => {
           
           {selectedApplication && (
             <div className="space-y-6">
-              {/* Applicant Information */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h4 className="font-semibold text-gray-900 mb-3">Applicant Information</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -1750,7 +2199,6 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
-              {/* Job Information */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h4 className="font-semibold text-gray-900 mb-3">Job Information</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -1773,11 +2221,9 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
-              {/* Documents Section */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h4 className="font-semibold text-gray-900 mb-3">Uploaded Documents</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* CV */}
                   <div className="bg-white rounded-lg p-4 border border-gray-200">
                     <div className="flex items-center space-x-2 mb-3">
                       {getFileIcon(selectedApplication.cv_url || selectedApplication.resume_url)}
@@ -1796,7 +2242,6 @@ const ESSOfficerDashboard = () => {
                     )}
                   </div>
                   
-                  {/* Recommendation Letter */}
                   <div className="bg-white rounded-lg p-4 border border-gray-200">
                     <div className="flex items-center space-x-2 mb-3">
                       <FaFileSignature className="w-5 h-5 text-blue-600" />
@@ -1818,7 +2263,6 @@ const ESSOfficerDashboard = () => {
                     )}
                   </div>
                   
-                  {/* Evaluation Form */}
                   <div className="bg-white rounded-lg p-4 border border-gray-200">
                     <div className="flex items-center space-x-2 mb-3">
                       <FaAward className="w-5 h-5 text-purple-600" />
@@ -1842,7 +2286,6 @@ const ESSOfficerDashboard = () => {
                 </div>
               </div>
               
-              {/* Cover Letter */}
               {selectedApplication.cover_letter && (
                 <div className="bg-gray-50 rounded-xl p-4">
                   <h4 className="font-semibold text-gray-900 mb-3">Cover Letter</h4>
@@ -1850,7 +2293,6 @@ const ESSOfficerDashboard = () => {
                 </div>
               )}
               
-              {/* Action Buttons */}
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   onClick={() => setShowApplicationDetails(false)}
@@ -1921,7 +2363,7 @@ const ESSOfficerDashboard = () => {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold">ESS Officer Dashboard</h1>
-              <p className="text-green-200 mt-1">Manage jobs, applications, and messages</p>
+              <p className="text-green-200 mt-1">Manage jobs, applications, users, and messages</p>
             </div>
             <button
               onClick={handleSignOut}
@@ -1964,6 +2406,17 @@ const ESSOfficerDashboard = () => {
                 Manage Applications
               </button>
               <button
+                onClick={() => setActiveTab('users')}
+                className={`py-4 px-1 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  activeTab === 'users'
+                    ? 'border-green-900 text-green-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FaUsers className="inline mr-2" />
+                Manage Users
+              </button>
+              <button
                 onClick={() => setActiveTab('messages')}
                 className={`py-4 px-1 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === 'messages'
@@ -1985,6 +2438,7 @@ const ESSOfficerDashboard = () => {
           <div className="p-6">
             {activeTab === 'jobs' && <JobsTab />}
             {activeTab === 'applications' && <ApplicationsTab />}
+            {activeTab === 'users' && <UsersTab />}
             {activeTab === 'messages' && <MessagesTab />}
           </div>
         </div>
@@ -1995,6 +2449,7 @@ const ESSOfficerDashboard = () => {
       {showEditJobModal && <EditJobModal />}
       {showDeleteModal && <DeleteConfirmModal />}
       {showApplicationDetails && <ApplicationDetailsModal />}
+      {showAddUserModal && <AddUserModal />}
     </div>
   );
 };
