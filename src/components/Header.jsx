@@ -18,6 +18,9 @@ const Header = () => {
   const [students, setStudents] = useState([]);
   const [profilePic, setProfilePic] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [userName, setUserName] = useState("");
+  const [userRole, setUserRole] = useState("");
+  const [userEmail, setUserEmail] = useState("");
 
   const navItems = [
     { name: "Home", path: "/home", icon: <FaHome className="w-4 h-4" /> },
@@ -28,8 +31,8 @@ const Header = () => {
 
   const profileItems = [
     { name: "Profile", path: "/profile", icon: <UserRoundPen className="w-4 h-4" /> },
-    { name: "Messages", path: "/message", icon: <BellIcon  className="w-4 h-4" /> },
-    { name: "My Applications", path: "/whistlist ", icon: <BriefcaseBusiness className="w-4 h-4" /> },
+    { name: "Messages", path: "/message", icon: <BellIcon className="w-4 h-4" /> },
+    { name: "My Applications", path: "/whistlist", icon: <BriefcaseBusiness className="w-4 h-4" /> },
   ];
 
   const handleSignOut = async () => {
@@ -40,6 +43,46 @@ const Header = () => {
   const handleMenu = () => setOpenMenu(!openMenu);
   const profileMenu = () => setOpenProfile(!openProfile);
 
+  // Fetch user profile data
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!session?.user) return;
+
+      try {
+        // First try to get from profiles table
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("full_name, role, profile_pic")
+          .eq("id", session.user.id)
+          .single();
+
+        if (!profileError && profileData) {
+          // Use data from profiles table
+          setUserName(profileData.full_name || session.user.user_metadata?.full_name || session.user.user_metadata?.name || "User");
+          setUserRole(profileData.role || "Student");
+          setProfilePic(profileData.profile_pic);
+        } else {
+          // Fallback to user metadata
+          const metadata = session.user.user_metadata || {};
+          setUserName(metadata.full_name || metadata.name || session.user.email?.split('@')[0] || "User");
+          setUserRole(metadata.role || "Student");
+          setProfilePic(metadata.avatar_url || null);
+        }
+
+        setUserEmail(session.user.email || "");
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+        // Fallback to email username
+        setUserName(session.user.email?.split('@')[0] || "User");
+        setUserRole("Student");
+        setUserEmail(session.user.email || "");
+      }
+    };
+
+    fetchUserProfile();
+  }, [session]);
+
+  // Fetch profile picture
   useEffect(() => {
     const fetchProfilePic = async () => {
       if (!session?.user) return;
@@ -105,17 +148,37 @@ const Header = () => {
   // Function to mark messages as read when clicking on bell
   const handleBellClick = () => {
     if (unreadCount > 0) {
-      // Optionally mark all messages as read when clicking the bell
-      // This could be implemented if desired
       console.log('Navigating to messages with', unreadCount, 'unread messages');
     }
     navigate('/message');
   };
 
+  // Get first name for greeting
+  const getFirstName = () => {
+    if (!userName) return "User";
+    return userName.split(' ')[0];
+  };
+
+  // Get role display name
+  const getRoleDisplay = () => {
+    switch (userRole) {
+      case 'student':
+        return 'Student';
+      case 'company':
+        return 'Company Representative';
+      case 'ess_officer':
+        return 'ESS Officer';
+      case 'admin':
+        return 'Administrator';
+      default:
+        return 'Student';
+    }
+  };
+
   return (
     <div className="relative">
       {/* Mobile Header */}
-      <div className=" py-4 flex justify-between items-center px-6 fixed z-50 w-full top-0 bg-gradient-to-r from-green-950 to-green-800 text-white shadow-2xl lg:hidden">
+      <div className="py-4 flex justify-between items-center px-6 fixed z-50 w-full top-0 bg-gradient-to-r from-green-950 to-green-800 text-white shadow-2xl lg:hidden">
         <div className="flex items-center space-x-4">
           <button
             onClick={handleMenu}
@@ -130,7 +193,7 @@ const Header = () => {
 
           <div className="text-sm">
             <p className="font-semibold">
-              Welcome, {session?.user?.user_metadata?.name?.split(' ')[0] || "User"}
+              Welcome, {getFirstName()}
             </p>
             <p className="text-green-200 text-xs">Ready to advance your career?</p>
           </div>
@@ -155,7 +218,7 @@ const Header = () => {
       </div>
 
       {/* Desktop Navigation */}
-      <div className="hidden md:hidden lg:flex  justify-between items-center px-8 lg:px-16 py-4 fixed z-50 w-full top-0 bg-white/95 backdrop-blur-sm shadow-2xl border-b border-gray-200">
+      <div className="hidden lg:flex justify-between items-center px-8 lg:px-16 py-4 fixed z-50 w-full top-0 bg-white/95 backdrop-blur-sm shadow-2xl border-b border-gray-200">
         {/* Logo Section */}
         <div className="flex items-center space-x-4">
           <img 
@@ -172,7 +235,7 @@ const Header = () => {
         </div>
        
         {/* Navigation Items */}
-        <nav className="flex items-center space-x-8">
+        <nav className="flex items-center space-x-9">
           {navItems.map((item, index) => (
             <Link 
               key={index} 
@@ -189,7 +252,7 @@ const Header = () => {
         </nav>
 
         {/* User Section */}
-        <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-6 ml-10">
           {/* Profile Icons */}
           <div className="flex items-center space-x-4 text-green-900">
             {profileItems.map((item, index) => {
@@ -242,9 +305,9 @@ const Header = () => {
             <div className="flex items-center space-x-3">
               <div className="text-right">
                 <p className="text-sm font-semibold text-gray-900">
-                  {session?.user?.user_metadata?.name?.split(' ')[0] || "User"}
+                  {userName || "User"}
                 </p>
-                <p className="text-xs text-gray-600">Student</p>
+                <p className="text-xs text-gray-600">{getRoleDisplay()}</p>
               </div>
               <div className="relative">
                 <img
@@ -260,7 +323,7 @@ const Header = () => {
               onClick={handleSignOut}
               className="bg-gradient-to-r from-green-950 to-green-800 hover:from-green-800 hover:to-green-700 text-white px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-lg flex items-center space-x-2"
             >
-              <FaSignOutAlt className="w-4 h-4" />
+              <FaSignOutAlt className="w-2 h-4" />
               <span>Sign Out</span>
             </button>
           </div>
@@ -295,7 +358,7 @@ const Header = () => {
               </div>
             </div>
             <p className="text-green-200 text-sm">
-              Welcome, {session?.user?.user_metadata?.name || "User"}
+              Welcome, {userName || "User"}
             </p>
           </div>
 
@@ -435,8 +498,8 @@ const Header = () => {
                 className="w-12 h-12 rounded-full object-cover border-2 border-green-300"
               />
               <div>
-                <p className="font-semibold">{session?.user?.user_metadata?.name || "User"}</p>
-                <p className="text-green-200 text-sm">{session?.user?.email}</p>
+                <p className="font-semibold">{userName || "User"}</p>
+                <p className="text-green-200 text-sm">{userEmail}</p>
               </div>
             </div>
           </div>
@@ -491,7 +554,7 @@ const Header = () => {
       </div>
 
       {/* Spacer for fixed header */}
-      <div className="h-16 md:h-24"></div>
+      <div className="h-16 lg:h-24"></div>
     </div>
   );
 };

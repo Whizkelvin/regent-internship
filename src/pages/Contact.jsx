@@ -37,37 +37,37 @@ const Contact = () => {
     title: "",
     message: "",
     details: [],
-    type: "success" // or "error"
+    type: "success"
   });
   
   const formRef = useRef(null);
+  const YOUR_EMAIL = "jasonagyeman060@gmail.com";
 
-  // Replace with YOUR email address
-  const YOUR_EMAIL = "jasonagyeman060@gmail.com"; 
-
-  // Check if user is logged in
   useEffect(() => {
     checkUser();
   }, []);
 
   const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      setUser(user);
-      setUserEmail(user.email);
-      
-      // Try to get user's name from metadata or profile
-      const name = user.user_metadata?.name || 
-                   user.user_metadata?.full_name || 
-                   user.email?.split('@')[0];
-      setUserName(name);
-      
-      // Pre-fill form with user data
-      setFormData(prev => ({
-        ...prev,
-        name: name || "",
-        email: user.email || ""
-      }));
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+        setUserEmail(user.email);
+        
+        const name = user.user_metadata?.full_name || 
+                     user.user_metadata?.name || 
+                     user.email?.split('@')[0] ||
+                     "User";
+        setUserName(name);
+        
+        setFormData(prev => ({
+          ...prev,
+          name: name,
+          email: user.email || ""
+        }));
+      }
+    } catch (error) {
+      console.error("Error checking user:", error);
     }
   };
 
@@ -111,24 +111,17 @@ const Contact = () => {
     }
   };
 
-  // Clear all form inputs
   const clearForm = () => {
     setFormData({
-      name: user ? userName : "",
-      email: user ? userEmail : "",
+      name: userName || "",
+      email: userEmail || "",
       phone: "",
       subject: "",
       message: "",
     });
     setErrors({});
-    
-    // Also reset form validation state
-    if (formRef.current) {
-      formRef.current.reset();
-    }
   };
 
-  // Reset form to initial state
   const resetForm = () => {
     clearForm();
     setShowSuccessModal(false);
@@ -146,9 +139,9 @@ const Contact = () => {
     setIsSubmitting(true);
 
     try {
-      // =======================
-      // 1. SEND EMAIL TO YOURSELF USING FORMSUBMIT.CO
-      // =======================
+      const currentFormData = { ...formData };
+      
+      // 1. SEND EMAIL USING FORMSUBMIT.CO
       const emailResponse = await fetch(`https://formsubmit.co/ajax/${YOUR_EMAIL}`, {
         method: "POST",
         headers: { 
@@ -156,14 +149,12 @@ const Contact = () => {
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          name: formData.name.trim(),
-          email: formData.email.trim(),
-          phone: formData.phone?.trim() || 'Not provided',
-          subject: formData.subject.trim(),
-          message: formData.message.trim(),
-          
-          // FormSubmit.co options
-          _subject: `Contact Form: ${formData.subject}`,
+          name: currentFormData.name.trim(),
+          email: currentFormData.email.trim(),
+          phone: currentFormData.phone?.trim() || 'Not provided',
+          subject: currentFormData.subject.trim(),
+          message: currentFormData.message.trim(),
+          _subject: `Contact Form: ${currentFormData.subject}`,
           _template: "table",
           _captcha: "false",
         })
@@ -175,91 +166,70 @@ const Contact = () => {
       
       const emailResult = await emailResponse.json();
       
-      // FormSubmit.co returns success as string "true" or "false"
       if (emailResult.success !== "true") {
-        const errorMsg = emailResult.message || 
-                        emailResult.error || 
-                        "FormSubmit.co returned false";
-        throw new Error(`Email service error: ${errorMsg}`);
+        throw new Error(`Email service error`);
       }
 
-      // =======================
-      // 2. SAVE TO SUPABASE DATABASE (Optional backup)
-      // =======================
+      // 2. SAVE TO SUPABASE (Optional)
       let dbSuccess = false;
+      let dbErrorMsg = "";
       try {
         const { error: dbError } = await supabase
           .from('contact_messages')
           .insert([
             {
-              name: formData.name.trim(),
-              email: formData.email.trim().toLowerCase(),
-              phone: formData.phone?.trim() || null,
-              subject: formData.subject.trim(),
-              message: formData.message.trim(),
+              name: currentFormData.name.trim(),
+              email: currentFormData.email.trim().toLowerCase(),
+              phone: currentFormData.phone?.trim() || null,
+              subject: currentFormData.subject.trim(),
+              message: currentFormData.message.trim(),
               created_at: new Date().toISOString()
             }
           ]);
 
-        if (dbError) {
-          console.warn("Failed to save to database:", dbError);
-        } else {
+        if (!dbError) {
           dbSuccess = true;
+        } else {
+          dbErrorMsg = dbError.message;
         }
       } catch (dbError) {
         console.warn("Database save failed:", dbError);
+        dbErrorMsg = dbError.message;
       }
 
-      // =======================
-      // 3. SHOW SUCCESS MODAL AND CLEAR FORM
-      // =======================
+      // 3. SHOW SUCCESS
+      const successDetails = [
+        { icon: "✓", text: `Email sent to ${YOUR_EMAIL}` },
+        { icon: "✓", text: `Your message has been received` },
+      
+        { icon: "⏱", text: "Response time: Within 24 hours" },
+        
+      ];
+      
       setSubmitStatus({
         title: "Message Sent Successfully! 🎉",
         message: "Thank you for contacting Regent Hub. We've received your message and will respond soon.",
-        details: [
-          { icon: "✓", text: `Email sent to ${YOUR_EMAIL}` },
-          { icon: "✓", text: `Auto-reply sent to ${formData.email}` },
-          { icon: dbSuccess ? "✓" : "⚠", text: dbSuccess ? "Message saved in database" : "Message not saved in database" },
-          { icon: "⏱", text: "Response time: Within 24 hours" }
-        ],
+        details: successDetails,
         type: "success"
       });
       
-      // Clear all form inputs
       clearForm();
-      
-      // Show success modal
       setShowSuccessModal(true);
 
     } catch (error) {
       console.error("Error submitting form:", error);
       
-      // =======================
-      // 4. SHOW ERROR MODAL
-      // =======================
-      let errorMessage = "We couldn't send your message.";
-      let errorDetails = "Please try again in a few moments.";
-      
-      if (error.message.includes("FormSubmit.co")) {
-        errorMessage = "Email service unavailable";
-        errorDetails = "Our email service is temporarily down. Please try again later.";
-      } else if (error.message.includes("HTTP error")) {
-        errorMessage = "Network error";
-        errorDetails = "Please check your internet connection and try again.";
-      } else if (error.message.includes("captcha")) {
-        errorMessage = "Security check failed";
-        errorDetails = "Please refresh the page and try submitting again.";
-      }
+      const errorDetails = [
+        { icon: "❌", text: "Email not sent - " + (error.message || "Unknown error") },
+        { icon: "⚠", text: "Please try again in a few minutes" },
+        { icon: "💡", text: "Check your internet connection" },
+        { icon: "📧", text: `Or email us directly at ${YOUR_EMAIL}` }
+      ];
       
       setSubmitStatus({
-        title: errorMessage,
-        message: errorDetails,
-        details: [
-          { icon: "❌", text: "Email not sent" },
-          { icon: "⚠", text: "Form data not saved" },
-          { icon: "💡", text: "Try using a different browser" },
-          { icon: "📧", text: `You can email us directly at ${YOUR_EMAIL}` }
-        ],
+        title: "Message Failed to Send",
+        message: "We couldn't send your message at this time. Please try again or contact us directly.",
+        details: errorDetails,
         type: "error"
       });
       
@@ -310,9 +280,8 @@ const Contact = () => {
             Have questions? We'd love to hear from you.
           </p>
           
-          {/* User Info Badge */}
           {user && (
-            <div className="mt-4 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg">
+            <div className="mt-4 inline-flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-lg">
               <User className="w-4 h-4" />
               <span className="text-sm font-medium">
                 Sending as: {userEmail}
@@ -330,8 +299,8 @@ const Contact = () => {
                 className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start space-x-4">
-                  <div className="bg-blue-50 p-3 rounded-xl">
-                    <div className="text-blue-600">
+                  <div className="bg-green-50 p-3 rounded-xl">
+                    <div className="text-green-700">
                       {item.icon}
                     </div>
                   </div>
@@ -370,8 +339,9 @@ const Contact = () => {
                       name="name"
                       value={formData.name}
                       onChange={handleChange}
+                      disabled={isSubmitting}
                       required
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 outline-none"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                       placeholder="John Doe"
                     />
                     {errors.name && (
@@ -390,9 +360,9 @@ const Contact = () => {
                       value={formData.email}
                       onChange={handleChange}
                       required
-                      disabled={!!user}
-                      className={`w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 outline-none ${
-                        user ? 'bg-gray-50 cursor-not-allowed' : ''
+                      disabled={!!user || isSubmitting}
+                      className={`w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                        user ? 'bg-gray-50' : ''
                       }`}
                       placeholder="john@example.com"
                     />
@@ -417,7 +387,8 @@ const Contact = () => {
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 outline-none"
+                    disabled={isSubmitting}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                     placeholder="+233 24 123-4567"
                   />
                 </div>
@@ -432,8 +403,9 @@ const Contact = () => {
                     name="subject"
                     value={formData.subject}
                     onChange={handleChange}
+                    disabled={isSubmitting}
                     required
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 outline-none"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                     placeholder="How can we help you?"
                   />
                   {errors.subject && (
@@ -450,9 +422,10 @@ const Contact = () => {
                     name="message"
                     value={formData.message}
                     onChange={handleChange}
+                    disabled={isSubmitting}
                     required
                     rows={6}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 outline-none resize-none"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 outline-none resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                     placeholder="Tell us more about your inquiry..."
                   />
                   {errors.message && (
@@ -464,8 +437,9 @@ const Contact = () => {
                   <input
                     type="checkbox"
                     id="privacy"
+                    disabled={isSubmitting}
                     required
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 mt-1"
+                    className="w-4 h-4 text-green-600 rounded focus:ring-green-500 mt-1 disabled:opacity-50"
                   />
                   <label htmlFor="privacy" className="text-sm text-gray-600">
                     I agree to the processing of my data. Your information will only be used to respond to your inquiry.
@@ -494,7 +468,8 @@ const Contact = () => {
                   <button
                     type="button"
                     onClick={clearForm}
-                    className="px-4 py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-all duration-200 flex items-center justify-center space-x-2"
+                    disabled={isSubmitting}
+                    className="px-4 py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Clear form"
                   >
                     <RefreshCw className="w-4 h-4" />
@@ -506,13 +481,12 @@ const Contact = () => {
           </div>
         </div>
 
-        {/* Important Note */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6">
+        <div className="mt-8 bg-green-50 border border-green-200 rounded-xl p-6">
           <div className="flex items-start space-x-3">
-            <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <Info className="w-5 h-5 text-green-700 mt-0.5 flex-shrink-0" />
             <div>
-              <h4 className="font-medium text-blue-900 mb-1">How our contact form works</h4>
-              <p className="text-blue-700 text-sm">
+              <h4 className="font-medium text-green-900 mb-1">How our contact form works</h4>
+              <p className="text-green-800 text-sm">
                 Your message is sent directly to our team via email and also saved in our secure database. 
                 You'll receive an automatic confirmation email to the address you provide.
                 We typically respond within 24 hours during business days.
@@ -522,161 +496,198 @@ const Contact = () => {
         </div>
       </main>
 
-      {/* Success Modal */}
+      {/* ✅ FIXED: Success Modal — backdrop is absolute sibling, panel has relative z-10 */}
       {showSuccessModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            {/* Background overlay */}
-            <div 
-              className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-              onClick={() => setShowSuccessModal(false)}
-            ></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50 transition-opacity"
+            onClick={() => setShowSuccessModal(false)}
+          />
 
-            {/* Modal */}
-            <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-6 pt-6 pb-4 sm:p-6">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-green-100 p-3 rounded-full">
-                      <CheckCircle className="w-8 h-8 text-green-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-gray-900">
-                        {submitStatus.title}
-                      </h3>
-                      <p className="text-gray-600 mt-1">
-                        {submitStatus.message}
-                      </p>
-                    </div>
+          {/* Modal Panel */}
+          <div className="relative z-10 bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
+            <div className="px-6 pt-6 pb-4">
+              <div className="flex justify-between items-start">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-green-100 p-3 rounded-full flex-shrink-0">
+                    <CheckCircle className="w-8 h-8 text-green-600" />
                   </div>
-                  <button
-                    onClick={() => setShowSuccessModal(false)}
-                    className="text-gray-400 hover:text-gray-500"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900">
+                      {submitStatus.title || "Message Sent Successfully! 🎉"}
+                    </h3>
+                    <p className="text-gray-600 mt-1">
+                      {submitStatus.message || "Thank you for contacting us. We'll respond soon."}
+                    </p>
+                  </div>
                 </div>
+                <button
+                  onClick={() => setShowSuccessModal(false)}
+                  className="text-gray-400 hover:text-gray-500 flex-shrink-0 ml-2"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
 
-                <div className="mt-6 space-y-3">
-                  <h4 className="font-medium text-gray-900">What happened:</h4>
-                  {submitStatus.details.map((detail, index) => (
+              <div className="mt-6 space-y-3">
+                <h4 className="font-medium text-gray-900">What happened:</h4>
+                {submitStatus.details && submitStatus.details.length > 0 ? (
+                  submitStatus.details.map((detail, index) => (
                     <div key={index} className="flex items-center space-x-3">
-                      <span className="text-green-600 font-bold">{detail.icon}</span>
+                      <span className={`${detail.icon === "✓" ? 'text-green-600' : detail.icon === "⚠" ? 'text-yellow-600' : 'text-green-600'} font-bold`}>
+                        {detail.icon}
+                      </span>
                       <span className="text-gray-700">{detail.text}</span>
                     </div>
-                  ))}
-                </div>
-
-                <div className="mt-6 bg-green-50 border border-green-200 rounded-xl p-4">
-                  <div className="flex items-start space-x-3">
-                    <MailCheck className="w-5 h-5 text-green-600 mt-0.5" />
-                    <div>
-                      <p className="text-green-800 text-sm font-medium">
-                        Check your email inbox
-                      </p>
-                      <p className="text-green-700 text-sm">
-                        You should receive a confirmation email shortly. Please check your spam folder if you don't see it.
-                      </p>
+                  ))
+                ) : (
+                  <>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-green-600 font-bold">✓</span>
+                      <span className="text-gray-700">Your message has been sent successfully</span>
                     </div>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-green-600 font-bold">✓</span>
+                      <span className="text-gray-700">A confirmation email has been sent to your inbox</span>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-green-600 font-bold">✓</span>
+                      <span className="text-gray-700">Our team will respond within 24 hours</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-6 bg-green-50 border border-green-200 rounded-xl p-4">
+                <div className="flex items-start space-x-3">
+                  <MailCheck className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-green-800 text-sm font-medium">
+                      Check your email inbox
+                    </p>
+                    <p className="text-green-700 text-sm">
+                      You should receive a confirmation email shortly. Please check your spam folder if you don't see it.
+                    </p>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div className="bg-gray-50 px-6 py-4 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-3 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Send Another Message
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSuccessModal(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-xl border border-gray-300 shadow-sm px-4 py-3 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Close
-                </button>
-              </div>
+            <div className="bg-gray-50 px-6 py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full sm:w-auto inline-flex justify-center rounded-xl border border-gray-300 shadow-sm px-4 py-3 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="w-full sm:w-auto inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-3 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                Send Another Message
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Error Modal */}
+      {/* ✅ FIXED: Error Modal — same fix applied */}
       {showErrorModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div 
-              className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-              onClick={() => setShowErrorModal(false)}
-            ></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50 transition-opacity"
+            onClick={() => setShowErrorModal(false)}
+          />
 
-            <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-6 pt-6 pb-4 sm:p-6">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-red-100 p-3 rounded-full">
-                      <AlertCircle className="w-8 h-8 text-red-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-gray-900">
-                        {submitStatus.title}
-                      </h3>
-                      <p className="text-gray-600 mt-1">
-                        {submitStatus.message}
-                      </p>
-                    </div>
+          {/* Modal Panel */}
+          <div className="relative z-10 bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
+            <div className="px-6 pt-6 pb-4">
+              <div className="flex justify-between items-start">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-red-100 p-3 rounded-full flex-shrink-0">
+                    <AlertCircle className="w-8 h-8 text-red-600" />
                   </div>
-                  <button
-                    onClick={() => setShowErrorModal(false)}
-                    className="text-gray-400 hover:text-gray-500"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900">
+                      {submitStatus.title || "Message Failed to Send"}
+                    </h3>
+                    <p className="text-gray-600 mt-1">
+                      {submitStatus.message || "We couldn't send your message at this time. Please try again."}
+                    </p>
+                  </div>
                 </div>
+                <button
+                  onClick={() => setShowErrorModal(false)}
+                  className="text-gray-400 hover:text-gray-500 flex-shrink-0 ml-2"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
 
-                <div className="mt-6 space-y-3">
-                  <h4 className="font-medium text-gray-900">Troubleshooting steps:</h4>
-                  {submitStatus.details.map((detail, index) => (
+              <div className="mt-6 space-y-3">
+                <h4 className="font-medium text-gray-900">Troubleshooting steps:</h4>
+                {submitStatus.details && submitStatus.details.length > 0 ? (
+                  submitStatus.details.map((detail, index) => (
                     <div key={index} className="flex items-center space-x-3">
                       <span className="text-red-600 font-bold">{detail.icon}</span>
                       <span className="text-gray-700">{detail.text}</span>
                     </div>
-                  ))}
-                </div>
-
-                <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4">
-                  <div className="flex items-start space-x-3">
-                    <Mail className="w-5 h-5 text-red-600 mt-0.5" />
-                    <div>
-                      <p className="text-red-800 text-sm font-medium">
-                        Contact us directly
-                      </p>
-                      <p className="text-red-700 text-sm">
-                        You can email us directly at {YOUR_EMAIL} or call us at +233 50 132 1208.
-                      </p>
+                  ))
+                ) : (
+                  <>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-red-600 font-bold">❌</span>
+                      <span className="text-gray-700">Failed to send your message</span>
                     </div>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-red-600 font-bold">⚠</span>
+                      <span className="text-gray-700">Please check your internet connection</span>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-red-600 font-bold">💡</span>
+                      <span className="text-gray-700">Try again in a few minutes</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4">
+                <div className="flex items-start space-x-3">
+                  <Mail className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-red-800 text-sm font-medium">
+                      Contact us directly
+                    </p>
+                    <p className="text-red-700 text-sm">
+                      You can email us directly at {YOUR_EMAIL} or call us at +233 50 132 1208.
+                    </p>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div className="bg-gray-50 px-6 py-4 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-3 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Try Again
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowErrorModal(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-xl border border-gray-300 shadow-sm px-4 py-3 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Close
-                </button>
-              </div>
+            <div className="bg-gray-50 px-6 py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setShowErrorModal(false)}
+                className="w-full sm:w-auto inline-flex justify-center rounded-xl border border-gray-300 shadow-sm px-4 py-3 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowErrorModal(false);
+                  setIsSubmitting(false);
+                }}
+                className="w-full sm:w-auto inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-3 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Try Again
+              </button>
             </div>
           </div>
         </div>
